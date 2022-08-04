@@ -150,58 +150,32 @@ module cpu6502
     // ALU outputs are result, overflow, carry
 
     // ALU
-    var logic [7:0] alu_out;
-    var logic alu_c_out, alu_v_out, alu_n_out, alu_z_out;
-    always_comb begin : alu
-        // operands come from accumulator and data bus
-        var logic [7:0] a_in = reg_a;
-        var logic [7:0] b_in = data_in;
-
-        // CMP and SBC do subtraction
-        var logic sub = reg_opcode[7];
-
-        // complement 2nd operand if subtracting
-        var logic [7:0] d_in = sub ? ~b_in : b_in;
-
-        // binary mode adder
-        var logic [8:0] bin_add = a_in + d_in + 8'(flag_c);
-        var logic [7:0] add_result = bin_add[7:0]; // TODO: decimal mode
-
-        var logic [7:0] data;
-        case (reg_opcode[7:5])
-            3'h0: data = a_in | b_in; // ORA
-            3'h1: data = a_in & b_in; // AND
-            3'h2: data = a_in ^ b_in; // EOR
-            3'h3: data = add_result;  // ADC
-            3'h4: data = 8'h0;        // STA
-            3'h5: data = b_in;        // LDA
-            3'h6: data = a_in;        // CMP
-            3'h7: data = add_result;  // SBC
-        endcase // case (reg_opcode[7:5])
-
-        alu_out = data; // TODO: decimal mode fixup
-        alu_n_out = data[7];
-        alu_v_out = (a_in[7] ^ data[7]) & (d_in[7] ^ data[7]);
-        alu_z_out = data == 8'h00;
-        alu_c_out = bin_add[8];
-    end // block: alu
+    uwire logic [7:0] alu_out;
+    uwire logic alu_c_out, alu_v_out, alu_n_out, alu_z_out;
+    // operands come from accumulator and data bus
+    cpu6502_alu alu
+        ( .a_in(reg_a),
+          .b_in(data_in),
+          .c_in(flag_c),
+          .d_in(flag_d),
+          .op(reg_opcode[7:5]),
+          .c_out(alu_c_out),
+          .v_out(alu_v_out),
+          .n_out(alu_n_out),
+          .z_out(alu_z_out),
+          .result(alu_out) );
 
     // Accumulator shift unit
-    var logic [7:0] shift_out;
-    var logic shift_n_out, shift_z_out, shift_c_out;
-    always_comb begin : shift
-        var logic [7:0] shift_in = reg_a;
-        var logic rotate = reg_opcode[5];
-        var logic right = reg_opcode[6];
-        var logic carry = flag_c & rotate;
-        if (right) begin
-            {shift_out, shift_c_out} = {carry, shift_in};
-        end else begin
-            {shift_c_out, shift_out} = {shift_in, carry};
-        end
-        shift_n_out = shift_out[7];
-        shift_z_out = shift_out == 8'h0;
-    end // block: shift
+    uwire logic [7:0] shift_out;
+    uwire logic shift_n_out, shift_z_out, shift_c_out;
+    cpu6502_shift shift
+        ( .data_in(reg_a),
+          .c_in(flag_c),
+          .op(reg_opcode[7:5]),
+          .c_out(shift_c_out),
+          .n_out(shift_n_out),
+          .z_out(shift_z_out),
+          .data_out(shift_out) );
 
     // Index register increment/decrement
     // ca DEX, e8 INX, 88 DEY, c8 INY
@@ -211,27 +185,16 @@ module cpu6502
     uwire logic [7:0] inc_y = reg_y + 1'b1;
 
     // RMW unit
-    var logic [7:0] rmw_out;
-    var logic rmw_c_out, rmw_z_out, rmw_n_out;
-    always_comb begin : rmw
-        var logic [7:0] rmw_in = data_in;
-        var logic inc_dec = reg_opcode[7];
-        if (inc_dec) begin
-            rmw_out = reg_opcode[5] ? (rmw_in + 1'b1) : (rmw_in - 1'b1);
-            rmw_c_out = 0;
-        end else begin
-            var logic rotate = reg_opcode[5];
-            var logic right = reg_opcode[6];
-            var logic carry = flag_c & rotate;
-            if (right) begin
-                {rmw_out, rmw_c_out} = {carry, rmw_in};
-            end else begin
-                {rmw_c_out, rmw_out} = {rmw_in, carry};
-            end
-        end
-        rmw_n_out = rmw_out[7];
-        rmw_z_out = rmw_out == 8'h0;
-    end // block: rmw
+    uwire logic [7:0] rmw_out;
+    uwire logic rmw_c_out, rmw_z_out, rmw_n_out;
+    cpu6502_shift rmw
+        ( .data_in(data_in),
+          .c_in(flag_c),
+          .op(reg_opcode[7:5]),
+          .c_out(rmw_c_out),
+          .n_out(rmw_n_out),
+          .z_out(rmw_z_out),
+          .data_out(rmw_out) );
 
     // Value stored by ST* instruction
     var logic [7:0] store_out;
@@ -763,4 +726,81 @@ module cpu6502
     assign io_debug_y      = reg_y;
     assign io_debug_s      = reg_s;
 
-endmodule
+endmodule: cpu6502
+
+module cpu6502_alu
+    ( input logic [7:0] a_in,
+      input logic [7:0] b_in,
+      input logic c_in,
+      input logic d_in,
+      input logic [2:0] op, // ORA,AND,EOR,ADC,STA,LDA,CMP,SBC
+
+      output logic c_out,
+      output logic v_out,
+      output logic n_out,
+      output logic z_out,
+      output logic [7:0] result
+      );
+
+    // CMP and SBC do subtraction
+    uwire logic sub = op[2];
+
+    // complement 2nd operand if subtracting
+    uwire logic [7:0] addend = sub ? ~b_in : b_in;
+
+    // binary mode adder
+    uwire logic [8:0] bin_add = a_in + addend + 8'(c_in);
+    uwire logic [7:0] add_result = bin_add[7:0]; // TODO: decimal mode
+
+    always_comb begin
+        case (op)
+            3'h0: result = a_in | b_in; // ORA
+            3'h1: result = a_in & b_in; // AND
+            3'h2: result = a_in ^ b_in; // EOR
+            3'h3: result = add_result;  // ADC
+            3'h4: result = 8'h0;        // STA
+            3'h5: result = b_in;        // LDA
+            3'h6: result = a_in;        // CMP
+            3'h7: result = add_result;  // SBC
+        endcase // case (op)
+    end
+
+    assign n_out = result[7];
+    assign v_out = (a_in[7] ^ result[7]) & (addend[7] ^ result[7]);
+    assign z_out = result == 8'h00;
+    assign c_out = bin_add[8];
+
+endmodule: cpu6502_alu
+
+module cpu6502_shift
+    ( input logic [7:0] data_in,
+      input logic c_in,
+      input logic [2:0] op, // 0=ASL, 1=ROL, 2=LSR, 3=ROR, 6=DEC, 7=INC
+
+      output logic c_out,
+      output logic n_out,
+      output logic z_out,
+      output logic [7:0] data_out
+      );
+
+    uwire logic rotate = op[0];
+    uwire logic right = op[1];
+    uwire logic inc_dec = op[2];
+    uwire logic carry = c_in & rotate;
+
+    always_comb begin
+        if (inc_dec) begin
+            data_out = op[0] ? (data_in + 1'b1) : (data_in - 1'b1);
+            c_out = 1'b0;
+        end else begin
+            if (right)
+                {data_out, c_out} = {carry, data_in};
+            else
+                {c_out, data_out} = {data_in, carry};
+        end
+    end
+
+    assign n_out = data_out[7];
+    assign z_out = data_out == 8'h0;
+
+endmodule: cpu6502_shift
