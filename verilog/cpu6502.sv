@@ -205,10 +205,10 @@ module cpu6502
 
     // Index register increment/decrement
     // ca DEX, e8 INX, 88 DEY, c8 INY
-    uwire logic [7:0] dec_x = reg_x - 1;
-    uwire logic [7:0] inc_x = reg_x + 1;
-    uwire logic [7:0] dec_y = reg_y - 1;
-    uwire logic [7:0] inc_y = reg_y + 1;
+    uwire logic [7:0] dec_x = reg_x - 1'b1;
+    uwire logic [7:0] inc_x = reg_x + 1'b1;
+    uwire logic [7:0] dec_y = reg_y - 1'b1;
+    uwire logic [7:0] inc_y = reg_y + 1'b1;
 
     // RMW unit
     var logic [7:0] rmw_out;
@@ -217,7 +217,7 @@ module cpu6502
         var logic [7:0] rmw_in = data_in;
         var logic inc_dec = reg_opcode[7];
         if (inc_dec) begin
-            rmw_out = reg_opcode[5] ? (rmw_in + 1) : (rmw_in - 1);
+            rmw_out = reg_opcode[5] ? (rmw_in + 1'b1) : (rmw_in - 1'b1);
             rmw_c_out = 0;
         end else begin
             var logic rotate = reg_opcode[5];
@@ -247,8 +247,8 @@ module cpu6502
     // Stack pointer
     var logic [7:0] next_s;
     always_comb begin
-        var logic [7:0] inc_s = reg_s + 1;
-        var logic [7:0] dec_s = reg_s - 1;
+        var logic [7:0] inc_s = reg_s + 1'b1;
+        var logic [7:0] dec_s = reg_s - 1'b1;
         // default to previous value
         next_s = reg_s;
         // When is S updated?
@@ -375,7 +375,7 @@ module cpu6502
 
     always_comb begin
         // Possible values for next_pc
-        var logic [15:0] pc_inc = reg_pc + 1;
+        var logic [15:0] pc_inc = reg_pc + 1'b1;
         var logic [15:0] pc_branch = {reg_pc[15:8], reg_branch[7:0]};
         var logic [7:0]  branch_carry = {{7{reg_branch[9]}}, reg_branch[8]};
         var logic [15:0] pc_fix_page = {reg_pc[15:8] + branch_carry, reg_pc[7:0]};
