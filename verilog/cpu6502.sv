@@ -22,8 +22,8 @@ module cpu6502
 
     // State type
     typedef enum {
-        prefetch,
-        fetch,
+        byte1,
+        byte2,
         zeropage1,
         zeropage2,
         absolute1,
@@ -231,7 +231,7 @@ module cpu6502
     always_comb begin
         // When is entire P register updated?
         var logic load_p
-            = (opcode_plp & (reg_state == prefetch)) |
+            = (opcode_plp & (reg_state == byte1)) |
               (opcode_rti & (reg_state == stack3));
         // default to previous values
         next_a = reg_a;
@@ -243,7 +243,7 @@ module cpu6502
         next_i = flag_i;
         next_z = flag_z;
         next_c = flag_c;
-        if (reg_state == prefetch) begin
+        if (reg_state == byte1) begin
             // Load instructions
             if (opcode_lda) next_a = data_in;
             if (opcode_ldx) next_x = data_in;
@@ -366,7 +366,7 @@ module cpu6502
 
         unique case (reg_state)
 
-            fetch:
+            byte2:
                 begin
                     next_pc = pc_inc;
                     next_addr = next_pc;
@@ -376,10 +376,10 @@ module cpu6502
                         8'b???_?11_??: next_state = absolute1; // $0000 or $0000,X
                         8'b???_?00_?1: next_state = zeropage1; // ($00,X) or ($00),Y
                         8'b???_110_?1: next_state = absolute1; // $0000,Y
-                        8'b???_010_?1: next_state = prefetch;  // immediate
+                        8'b???_010_?1: next_state = byte1;     // immediate
                         8'b???_?10_?0: next_state = implied;   // implied or push/pull
                         8'b???_100_00: next_state = branch1;   // relative
-                        8'b1??_000_?0: next_state = prefetch;  // immediate
+                        8'b1??_000_?0: next_state = byte1;     // immediate
                         8'b0??_000_00: next_state = stack1;    // BRK/JSR/RTI/RTS
                         8'b???_100_10: next_state = stuck;
                         8'b0??_000_10: next_state = stuck;
@@ -410,7 +410,7 @@ module cpu6502
                         = opcode_zeropage_x ? zeropage2 : // xxx_101_xx (14,15,16,17)
                           opcode_indirect_x ? zeropage2 : // xxx_000_x1 (01,03)
                           opcode_indirect_y ? indirect1 : // xxx_100_x1 (11,13)
-                          prefetch;                       // xxx_001_xx (04,05,06,07)
+                          byte1;                          // xxx_001_xx (04,05,06,07)
                     if (opcode_indirect_x) begin
                         // 01,03
                         offset = reg_x;
@@ -437,7 +437,7 @@ module cpu6502
                     next_addr = addr_zp2;
                     next_state
                         = opcode_indirect_x ? indirect1 : // xxx_000_x1 (01,03)
-                          prefetch;                       // xxx_101_xx (14,15,16,17)
+                          byte1;                          // xxx_101_xx (14,15,16,17)
                 end
 
             absolute1:
@@ -494,7 +494,7 @@ module cpu6502
                     if (reg_opcode[4]) begin
                         // indexed
                         // Read instructions go to state 'indexed' iff address carried
-                        var state maybe_indexed = reg_index[8] ? indexed : prefetch;
+                        var state maybe_indexed = reg_index[8] ? indexed : byte1;
                         next_state
                             = opcode_store ? indexed :
                               opcode_load  ? maybe_indexed :
@@ -502,7 +502,7 @@ module cpu6502
                               maybe_indexed;
                     end else begin
                         // not indexed
-                        next_state = opcode_modify ? modify1 : prefetch;
+                        next_state = opcode_modify ? modify1 : byte1;
                     end
                 end
 
@@ -542,7 +542,7 @@ module cpu6502
                     if (reg_opcode[4]) begin
                         // ($00),Y
                         // Read instructions go to state 'indexed' iff address carried
-                        var state maybe_indexed = reg_index[8] ? indexed : prefetch;
+                        var state maybe_indexed = reg_index[8] ? indexed : byte1;
                         next_state
                             = opcode_store   ? indexed :
                               opcode_load    ? maybe_indexed :
@@ -551,9 +551,9 @@ module cpu6502
                     end else begin
                         // ($00,X)
                         next_state
-                            = opcode_load_store ? prefetch :
+                            = opcode_load_store ? byte1 :
                               opcode_rmw        ? modify1 :
-                              prefetch;
+                              byte1;
                     end
                 end
 
@@ -573,14 +573,14 @@ module cpu6502
                     next_pc = reg_pc;
                     next_addr = addr_carry;
                     next_state
-                        = opcode_load_store ? prefetch :
+                        = opcode_load_store ? byte1 :
                           opcode_rmw        ? modify1 :
-                          prefetch;
+                          byte1;
                 end
 
-            prefetch:
+            byte1:
                 begin
-                    next_state = fetch;
+                    next_state = byte2;
                 end
 
             modify1:
@@ -592,7 +592,7 @@ module cpu6502
 
             modify2:
                 begin
-                    next_state = prefetch;
+                    next_state = byte1;
                     next_write_enable = 1;
                     next_data_out = rmw_out;
                 end
@@ -607,7 +607,7 @@ module cpu6502
                     if (branch_taken) begin
                         next_state = branch2;
                     end else begin
-                        next_state = fetch;
+                        next_state = byte2;
                     end
                     next_addr = next_pc;
                 end
@@ -620,7 +620,7 @@ module cpu6502
                     if (reg_branch[9] | reg_branch[8]) begin
                         next_state = branch3;
                     end else begin
-                        next_state = fetch;
+                        next_state = byte2;
                     end
                 end
 
@@ -628,7 +628,7 @@ module cpu6502
                 begin
                     next_pc = pc_fix_page;
                     next_addr = next_pc;
-                    next_state = fetch;
+                    next_state = byte2;
                 end
 
             stack1:
@@ -655,7 +655,7 @@ module cpu6502
                 // 1a  nop nop nop nop TXS TSX nop nop
                 // all except PHP PLP PHA PLA are done right away
                 begin
-                    next_state = fetch;
+                    next_state = byte2;
                 end // case: implied
 
             stuck:
@@ -667,7 +667,7 @@ module cpu6502
 
         endcase // case (reg_state)
 
-        if (opcode_store & (next_state == prefetch)) begin
+        if (opcode_store & (next_state == byte1)) begin
             // FIXME: suppress write if the instruction is immediate mode
             next_write_enable = 1;
             next_data_out = store_out;
@@ -683,7 +683,7 @@ module cpu6502
         end
 
         else if (io_enable) begin
-            if (reg_state == fetch) begin
+            if (reg_state == byte2) begin
                 reg_opcode <= data_in;
             end
             reg_pc     <= next_pc;
@@ -717,7 +717,7 @@ module cpu6502
     assign io_address      = next_addr;
     assign io_data_out     = next_data_out;
     assign io_write_enable = next_write_enable;
-    assign io_sync         = (reg_state == prefetch);
+    assign io_sync         = (reg_state == byte1);
 
     assign io_debug_opcode = reg_opcode;
     assign io_debug_pc     = reg_pc;
