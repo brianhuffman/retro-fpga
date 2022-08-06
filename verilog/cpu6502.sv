@@ -717,7 +717,7 @@ module cpu6502
     assign io_address      = next_addr;
     assign io_data_out     = next_data_out;
     assign io_write_enable = next_write_enable;
-    assign io_sync         = (reg_state == fetch);
+    assign io_sync         = (reg_state == prefetch);
 
     assign io_debug_opcode = reg_opcode;
     assign io_debug_pc     = reg_pc;
