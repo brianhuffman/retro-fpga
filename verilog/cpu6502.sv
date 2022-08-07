@@ -332,8 +332,8 @@ module cpu6502
     // State machine
     var logic [15:0] next_pc;
     var logic [15:0] next_addr;
-    var logic        next_write_enable;
-    var logic [7:0]  next_data_out;
+    var logic        write_enable;
+    var logic [7:0]  data_out;
     var state        next_state;
 
     // Possible values for next_pc
@@ -356,8 +356,8 @@ module cpu6502
 
     always_comb begin
         // Default to reading from memory
-        next_write_enable = 0;
-        next_data_out = 0;
+        write_enable = 0;
+        data_out = 0;
         // Writes could happen from states zeropage1, zeropage2, absolute2, indirect2 or indexed.
         // Writes will happen from states modify1 and modify2.
 
@@ -586,15 +586,15 @@ module cpu6502
             modify1:
                 begin
                     next_state = modify2;
-                    next_write_enable = 1;
-                    next_data_out = data_in;
+                    write_enable = 1;
+                    data_out = data_in;
                 end
 
             modify2:
                 begin
                     next_state = byte1;
-                    next_write_enable = 1;
-                    next_data_out = rmw_out;
+                    write_enable = 1;
+                    data_out = rmw_out;
                 end
 
             branch1:
@@ -669,8 +669,8 @@ module cpu6502
 
         if (opcode_store & (next_state == byte1)) begin
             // FIXME: suppress write if the instruction is immediate mode
-            next_write_enable = 1;
-            next_data_out = store_out;
+            write_enable = 1;
+            data_out = store_out;
         end
     end
 
@@ -705,8 +705,8 @@ module cpu6502
 
             // after we've done a write, data_in should reflect the
             // previous data_out.
-            if (next_write_enable) begin
-                reg_data_in <= next_data_out;
+            if (write_enable) begin
+                reg_data_in <= data_out;
             end else begin
                 reg_data_in <= io_data_in;
             end
@@ -715,8 +715,8 @@ module cpu6502
 
     // Module outputs
     assign io_address      = next_addr;
-    assign io_data_out     = next_data_out;
-    assign io_write_enable = next_write_enable;
+    assign io_data_out     = data_out;
+    assign io_write_enable = write_enable;
     assign io_sync         = (reg_state == byte1);
 
     assign io_debug_opcode = reg_opcode;
