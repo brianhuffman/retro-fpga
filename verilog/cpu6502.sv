@@ -31,7 +31,6 @@ module cpu6502
         indirect1,
         indirect2,
         indexed,
-        implied,
         modify1,
         modify2,
         branch1,
@@ -275,7 +274,7 @@ module cpu6502
             if (opcode_shift) next_c = rmw_c_out;
         end
 
-        if (reg_state == implied) begin
+        if (reg_state == byte1) begin
             //     00  20  40  60  80  a0  c0  e0
             // 08                  DEY TAY INY INX
             // 18  CLC SEC CLI SEI TYA CLV CLD SED
@@ -394,7 +393,7 @@ module cpu6502
                         8'b???_?00_?1: next_state = zeropage1; // ($00,X) or ($00),Y
                         8'b???_110_?1: next_state = absolute1; // $0000,Y
                         8'b???_010_?1: next_state = byte1;     // immediate
-                        8'b???_?10_?0: next_state = implied;   // implied or push/pull
+                        8'b???_?10_?0: next_state = byte1;     // implied or push/pull
                         8'b???_100_00: next_state = branch1;   // relative
                         8'b1??_000_?0: next_state = byte1;     // immediate
                         8'b0??_000_00: next_state = stack1;    // BRK/JSR/RTI/RTS
@@ -654,18 +653,6 @@ module cpu6502
             stack3:
                 begin
                 end
-
-            implied:
-                // xxx_x10_x0: implied (_8,_a)
-                //     00  20  40  60  80  a0  c0  e0
-                // 08  PHP PLP PHA PLA DEY TAY INY INX
-                // 0a  ASL ROL LSR ROR TXA TAX DEX NOP
-                // 18  CLC SEC CLI SEI TYA CLV CLD SED
-                // 1a  nop nop nop nop TXS TSX nop nop
-                // all except PHP PLP PHA PLA are done right away
-                begin
-                    next_state = byte2;
-                end // case: implied
 
             stuck:
                 begin
