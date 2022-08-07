@@ -35,7 +35,6 @@ module cpu6502
         modify2,
         branch1,
         branch2,
-        branch3,
         stack1,
         stack2,
         stack3,
@@ -118,7 +117,7 @@ module cpu6502
     // 100 = BCC, 101 = BCS
     // 110 = BNE, 111 = BEQ
     var logic branch_taken;
-    var logic [9:0] next_branch;
+    var logic [9:0] branch_result;
     always_comb begin
         var logic flag;
         case (reg_opcode[7:6])
@@ -128,7 +127,7 @@ module cpu6502
             2'b11: flag = flag_z;
         endcase // case (reg_opcode[7:6])
         branch_taken = (flag == reg_opcode[5]);
-        next_branch = {2'b0, reg_pc[7:0]} + {{2{data_in[7]}}, data_in};
+        branch_result = {2'b0, reg_pc[7:0]} + {{2{data_in[7]}}, data_in};
     end
 
     // Indexed address calculations
@@ -339,9 +338,9 @@ module cpu6502
 
     // Possible values for next_pc
     uwire logic [15:0] pc_inc = reg_pc + 16'(pc_increment);
-    uwire logic [15:0] pc_branch = {reg_pc[15:8], reg_branch[7:0]};
+    uwire logic [15:0] pc_branch1 = {reg_pc[15:8], branch_result[7:0]};
     uwire logic [7:0]  branch_carry = {{7{reg_branch[9]}}, reg_branch[8]};
-    uwire logic [15:0] pc_fix_page = {reg_pc[15:8] + branch_carry, reg_pc[7:0]};
+    uwire logic [15:0] pc_branch2 = {reg_pc[15:8] + branch_carry, reg_pc[7:0]};
     uwire logic [15:0] pc_jmp = {io_data_in, reg_data_in};
 
     // Possible values for address_out
@@ -394,7 +393,8 @@ module cpu6502
                         8'b???_110_?1: next_state = absolute1; // $0000,Y
                         8'b???_010_?1: next_state = byte1;     // immediate
                         8'b???_?10_?0: next_state = byte1;     // implied or push/pull
-                        8'b???_100_00: next_state = branch1;   // relative
+                        8'b???_100_00:                         // relative
+                            next_state = branch_taken ? branch1 : byte1;
                         8'b1??_000_?0: next_state = byte1;     // immediate
                         8'b0??_000_00: next_state = stack1;    // BRK/JSR/RTI/RTS
                         8'b???_100_10: next_state = stuck;
@@ -609,34 +609,23 @@ module cpu6502
                 end
 
             branch1:
-                // Read branch offset
+                // Adjust low byte of PC for branch
                 // xxx_100_00 (10)
                 // 10  BPL BMI BVC BVS BCC BCS BNE BEQ
                 // 12   -   -   -   -   -   -   -   -
                 begin
-                    pc_increment = 1;
-                    if (branch_taken) begin
+                    next_pc = pc_branch1;
+                    if (branch_result[9:8] == 2'b00)
+                        next_state = byte1;
+                    else
                         next_state = branch2;
-                    end else begin
-                        next_state = byte2;
-                    end
                 end
 
             branch2:
-                // Ignore read from byte following branch instruction
+                // Fixup high byte of PC for branch
                 begin
-                    next_pc = pc_branch;
-                    if (reg_branch[9] | reg_branch[8]) begin
-                        next_state = branch3;
-                    end else begin
-                        next_state = byte2;
-                    end
-                end
-
-            branch3:
-                begin
-                    next_pc = pc_fix_page;
-                    next_state = byte2;
+                    next_pc = pc_branch2;
+                    next_state = byte1;
                 end
 
             stack1:
@@ -695,7 +684,7 @@ module cpu6502
             reg_state  <= next_state;
             reg_addr   <= address_out;
             reg_index  <= next_index;
-            reg_branch <= next_branch;
+            reg_branch <= branch_result;
 
             // after we've done a write, data_in should reflect the
             // previous data_out.
