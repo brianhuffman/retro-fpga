@@ -331,13 +331,14 @@ module cpu6502
 
     // State machine
     var logic [15:0] next_pc;
+    var logic        pc_increment;
     var logic [15:0] address_out;
     var logic        write_enable;
     var logic [7:0]  data_out;
     var state        next_state;
 
     // Possible values for next_pc
-    uwire logic [15:0] pc_inc = reg_pc + 1'b1;
+    uwire logic [15:0] pc_inc = reg_pc + 16'(pc_increment);
     uwire logic [15:0] pc_branch = {reg_pc[15:8], reg_branch[7:0]};
     uwire logic [7:0]  branch_carry = {{7{reg_branch[9]}}, reg_branch[8]};
     uwire logic [15:0] pc_fix_page = {reg_pc[15:8] + branch_carry, reg_pc[7:0]};
@@ -363,13 +364,18 @@ module cpu6502
 
         // Default to no address indexing calculation
         offset = 0;
+        // Default to no PC increment
+        pc_increment = 0;
+        // Default PC to using incrementer
+        next_pc = pc_inc;
+        // Default address_out to PC
+        address_out = reg_pc;
 
         unique case (reg_state)
 
             byte2:
                 begin
-                    next_pc = pc_inc;
-                    address_out = next_pc;
+                    pc_increment = !opcode_1_byte;
 
                     casez (data_in)
                         8'b???_?01_??: next_state = zeropage1; // $00 or $00,X
@@ -404,7 +410,6 @@ module cpu6502
                 // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
                 // 17  slo rla sre rra sax lax dcp isb  $00,X
                 begin
-                    next_pc = reg_pc;
                     address_out = addr_zp1;
                     next_state
                         = opcode_zeropage_x ? zeropage2 : // xxx_101_xx (14,15,16,17)
@@ -433,7 +438,6 @@ module cpu6502
                 // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
                 // 17  slo rla sre rra sax lax dcp isb  $00,X
                 begin
-                    next_pc = reg_pc;
                     address_out = addr_zp2;
                     next_state
                         = opcode_indirect_x ? indirect1 : // xxx_000_x1 (01,03)
@@ -455,8 +459,7 @@ module cpu6502
                 // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X  1110 (Y for shx/LDX)
                 // 1f  slo rla sre rra sha lax dcp isb  $0000,X  1111 (Y for sha/lax)
                 begin
-                    next_pc = pc_inc;
-                    address_out = next_pc;
+                    pc_increment = 1;
                     next_state = absolute2;
                     if (reg_opcode[4]) begin
                         // indexing 19,1b,1c,1d,1e,1f
@@ -490,7 +493,6 @@ module cpu6502
                 // or if the instruction was indexed write or modify
                 begin
                     address_out = addr_abs;
-                    next_pc = reg_pc;
                     if (reg_opcode[4]) begin
                         // indexed
                         // Read instructions go to state 'indexed' iff address carried
@@ -516,7 +518,6 @@ module cpu6502
                 // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
                 // 13  slo rla sre rra sha lax dcp isb  ($00),Y
                 begin
-                    next_pc = reg_pc;
                     address_out = addr_inc;
                     next_state = indirect2;
                     if (reg_opcode[4]) begin
@@ -535,7 +536,6 @@ module cpu6502
                 // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
                 // 13  slo rla sre rra sha lax dcp isb  ($00),Y
                 begin
-                    next_pc = reg_pc;
                     address_out = addr_abs;
                     // state "indexed" only if address calculation carried
                     // or if the instruction was indexed write or modify
@@ -570,7 +570,6 @@ module cpu6502
                 // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X
                 // 1f  slo rla sre rra sha lax dcp isb  $0000,X
                 begin
-                    next_pc = reg_pc;
                     address_out = addr_carry;
                     next_state
                         = opcode_load_store ? byte1 :
@@ -581,6 +580,7 @@ module cpu6502
             byte1:
                 begin
                     next_state = byte2;
+                    pc_increment = 1;
                 end
 
             modify1:
@@ -603,20 +603,18 @@ module cpu6502
                 // 10  BPL BMI BVC BVS BCC BCS BNE BEQ
                 // 12   -   -   -   -   -   -   -   -
                 begin
-                    next_pc = pc_inc;
+                    pc_increment = 1;
                     if (branch_taken) begin
                         next_state = branch2;
                     end else begin
                         next_state = byte2;
                     end
-                    address_out = next_pc;
                 end
 
             branch2:
                 // Ignore read from byte following branch instruction
                 begin
                     next_pc = pc_branch;
-                    address_out = next_pc;
                     if (reg_branch[9] | reg_branch[8]) begin
                         next_state = branch3;
                     end else begin
@@ -627,7 +625,6 @@ module cpu6502
             branch3:
                 begin
                     next_pc = pc_fix_page;
-                    address_out = next_pc;
                     next_state = byte2;
                 end
 
@@ -660,8 +657,6 @@ module cpu6502
 
             stuck:
                 begin
-                    next_pc = reg_pc;
-                    address_out = next_pc;
                     next_state = stuck;
                 end
 
