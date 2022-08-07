@@ -373,7 +373,16 @@ module cpu6502
 
         unique case (reg_state)
 
+            byte1:
+                // Requesting opcode byte
+                begin
+                    next_state = byte2;
+                    pc_increment = 1;
+                end
+
             byte2:
+                // Requesting byte after opcode byte
+                // Opcode available on data_in and reg_opcode
                 begin
                     pc_increment = !opcode_1_byte;
 
@@ -445,7 +454,8 @@ module cpu6502
                 end
 
             absolute1:
-                // Read the low byte of a 16-bit address
+                // Request the final byte of a 3-byte instruction
+                // data_in contains the low byte of a 16-bit address
                 // xxx_x11_xx, xxx_110_x1 (_c,_d,_e,_f,19,1b)
                 //     00  20  40  60  80  a0  c0  e0
                 // 0c  nop BIT JMP JMP'STY LDY CPY CPX  $0000
@@ -475,6 +485,7 @@ module cpu6502
                 end
 
             absolute2:
+                // data_in contains the high byte of a 16-bit address
                 // Read the high byte of a 16-bit address
                 // $0000 or $0000,X or $0000,Y
                 // xxx_x11_xx, xxx_110_x1 (_c,_d,_e,_f,19,1b)
@@ -575,12 +586,6 @@ module cpu6502
                         = opcode_load_store ? byte1 :
                           opcode_rmw        ? modify1 :
                           byte1;
-                end
-
-            byte1:
-                begin
-                    next_state = byte2;
-                    pc_increment = 1;
                 end
 
             modify1:
