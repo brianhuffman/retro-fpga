@@ -102,6 +102,7 @@ module cpu6502
     uwire logic opcode_txa          = reg_opcode == 8'h8A;
     uwire logic opcode_tya          = reg_opcode == 8'h98;
     uwire logic opcode_clv          = reg_opcode == 8'hB8;
+    uwire logic opcode_jmp_abs      = reg_opcode == 8'h4C;
     uwire logic opcode_cld_sed      = reg_opcode ==? 8'b11?_110_00; // CLD/SED
     uwire logic opcode_cli_sei      = reg_opcode ==? 8'b01?_110_00; // CLI/SEI
     uwire logic opcode_clc_sec      = reg_opcode ==? 8'b00?_110_00; // CLC/SEC
@@ -342,6 +343,7 @@ module cpu6502
     uwire logic [15:0] pc_branch = {reg_pc[15:8], reg_branch[7:0]};
     uwire logic [7:0]  branch_carry = {{7{reg_branch[9]}}, reg_branch[8]};
     uwire logic [15:0] pc_fix_page = {reg_pc[15:8] + branch_carry, reg_pc[7:0]};
+    uwire logic [15:0] pc_jmp = {io_data_in, reg_data_in};
 
     // Possible values for address_out
     uwire logic [15:0] addr_stack = {8'h01, reg_s};
@@ -470,7 +472,12 @@ module cpu6502
                 // 1f  slo rla sre rra sha lax dcp isb  $0000,X  1111 (Y for sha/lax)
                 begin
                     pc_increment = 1;
-                    next_state = absolute2;
+                    if (opcode_jmp_abs) begin
+                        next_state = byte1;
+                        next_pc = pc_jmp;
+                    end else begin
+                        next_state = absolute2;
+                    end
                     if (reg_opcode[4]) begin
                         // indexing 19,1b,1c,1d,1e,1f
                         if (reg_opcode[3]) begin
