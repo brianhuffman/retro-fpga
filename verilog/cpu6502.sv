@@ -336,25 +336,25 @@ module cpu6502
     var logic [7:0]  next_data_out;
     var state        next_state;
 
+    // Possible values for next_pc
+    uwire logic [15:0] pc_inc = reg_pc + 1'b1;
+    uwire logic [15:0] pc_branch = {reg_pc[15:8], reg_branch[7:0]};
+    uwire logic [7:0]  branch_carry = {{7{reg_branch[9]}}, reg_branch[8]};
+    uwire logic [15:0] pc_fix_page = {reg_pc[15:8] + branch_carry, reg_pc[7:0]};
+
+    // Possible values for next_addr
+    uwire logic [15:0] addr_stack = {8'h01, reg_s};
+    uwire logic [15:0] addr_zp1   = {8'h00, data_in};
+    uwire logic [15:0] addr_zp2   = {8'h00, reg_index[7:0]};
+    uwire logic [15:0] addr_abs   = {data_in, reg_index[7:0]};
+    uwire logic [15:0] addr_fffe  = 16'hfffe;
+    uwire logic [15:0] addr_hold  = reg_addr;
+    uwire logic [15:0] addr_inc   = {reg_addr[15:8], reg_addr[7:0] + 8'h1};
+    uwire logic [15:0] addr_inc_page = {reg_addr[15:8] + 8'h1, reg_addr[7:0]};
+    uwire logic [15:0] addr_dec_page = {reg_addr[15:8] - 8'h1, reg_addr[7:0]};
+    uwire logic [15:0] addr_carry = {reg_addr[15:8] + {7'h0, reg_index[8]}, reg_addr[7:0]};
+
     always_comb begin
-        // Possible values for next_pc
-        var logic [15:0] pc_inc = reg_pc + 1'b1;
-        var logic [15:0] pc_branch = {reg_pc[15:8], reg_branch[7:0]};
-        var logic [7:0]  branch_carry = {{7{reg_branch[9]}}, reg_branch[8]};
-        var logic [15:0] pc_fix_page = {reg_pc[15:8] + branch_carry, reg_pc[7:0]};
-
-        // Possible values for next_addr
-        //var logic [15:0] addr_stack = {8'h01, reg_s};
-        var logic [15:0] addr_zp1   = {8'h00, data_in};
-        var logic [15:0] addr_zp2   = {8'h00, reg_index[7:0]};
-        var logic [15:0] addr_abs   = {data_in, reg_index[7:0]};
-        //var logic [15:0] addr_fffe  = 16'hfffe;
-        //var logic [15:0] addr_hold  = reg_addr;
-        var logic [15:0] addr_inc   = {reg_addr[15:8], reg_addr[7:0] + 8'h1};
-        //var logic [15:0] addr_inc_page = {reg_addr[15:8] + 8'h1, reg_addr[7:0]};
-        //var logic [15:0] addr_dec_page = {reg_addr[15:8] - 8'h1, reg_addr[7:0]};
-        var logic [15:0] addr_carry = {reg_addr[15:8] + {7'h0, reg_index[8]}, reg_addr[7:0]};
-
         // Default to reading from memory
         next_write_enable = 0;
         next_data_out = 0;
