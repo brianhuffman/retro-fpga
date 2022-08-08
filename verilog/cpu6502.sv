@@ -425,7 +425,8 @@ module cpu6502
                         = opcode_zeropage_x ? zeropage2 : // xxx_101_xx (14,15,16,17)
                           opcode_indirect_x ? zeropage2 : // xxx_000_x1 (01,03)
                           opcode_indirect_y ? indirect1 : // xxx_100_x1 (11,13)
-                          byte1;                          // xxx_001_xx (04,05,06,07)
+                          reg_opcode[1] ? modify1 :       // xxx_100_1x (06,07)
+                          byte1;                          // xxx_001_0x (04,05)
                     if (opcode_indirect_x) begin
                         // 01,03
                         offset = reg_x;
@@ -597,6 +598,7 @@ module cpu6502
             modify1:
                 begin
                     next_state = modify2;
+                    address_out = addr_hold;
                     write_enable = 1;
                     data_out = data_in;
                 end
@@ -604,6 +606,7 @@ module cpu6502
             modify2:
                 begin
                     next_state = byte1;
+                    address_out = addr_hold;
                     write_enable = 1;
                     data_out = rmw_out;
                 end
