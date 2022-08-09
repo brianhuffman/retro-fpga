@@ -21,24 +21,23 @@ module cpu6502
       );
 
     // State type
-    typedef enum {
-        byte1,
-        byte2,
-        zeropage1,
-        zeropage2,
-        absolute1,
-        absolute2,
-        indirect1,
-        indirect2,
-        indexed,
-        modify1,
-        modify2,
-        branch1,
-        branch2,
-        stack1,
-        stack2,
-        stack3,
-        stuck
+    typedef struct packed {
+        logic byte1;
+        logic byte2;
+        logic zeropage1;
+        logic zeropage2;
+        logic absolute1;
+        logic absolute2;
+        logic indirect1;
+        logic indirect2;
+        logic indexed;
+        logic modify1;
+        logic modify2;
+        logic branch1;
+        logic branch2;
+        logic stack1;
+        logic stack2;
+        logic stack3;
     } state;
 
     // Registers
@@ -212,8 +211,8 @@ module cpu6502
     always_comb begin
         // When is entire P register updated?
         var logic load_p
-            = (opcode_plp & (reg_state == byte1)) |
-              (opcode_rti & (reg_state == stack3));
+            = (opcode_plp & reg_state.byte1) |
+              (opcode_rti & reg_state.stack3);
         // default to previous values
         next_a = reg_a;
         next_x = reg_x;
@@ -224,7 +223,7 @@ module cpu6502
         next_i = flag_i;
         next_z = flag_z;
         next_c = flag_c;
-        if (reg_state == byte1) begin
+        if (reg_state.byte1) begin
             // Load instructions
             if (opcode_lda) next_a = data_in;
             if (opcode_ldx) next_x = data_in;
@@ -249,13 +248,13 @@ module cpu6502
             // TODO: CPX/CPY
         end
 
-        if (reg_state == modify2) begin
+        if (reg_state.modify2) begin
             next_n = rmw_n_out;
             next_z = rmw_z_out;
             if (opcode_shift) next_c = rmw_c_out;
         end
 
-        if (reg_state == byte1) begin
+        if (reg_state.byte1) begin
             //     00  20  40  60  80  a0  c0  e0
             // 08                  DEY TAY INY INX
             // 18  CLC SEC CLI SEI TYA CLV CLD SED
@@ -333,299 +332,303 @@ module cpu6502
     } control;
 
     // State machine
-    var state        next_state;
+    var state next_state;
 
     always_comb begin
         // Default all control signals to 0
         control = '{ default: 0 };
+        next_state = '{ default: 0 };
 
-        unique case (reg_state)
+        if (reg_state.byte1)
+        begin
+            // Requesting opcode byte
+            next_state.byte2 = 1;
+            control.pc_increment = 1;
+        end
 
-            byte1:
-                // Requesting opcode byte
-                begin
-                    next_state = byte2;
-                    control.pc_increment = 1;
-                end
+        if (reg_state.byte2)
+        begin
+            // Requesting byte after opcode byte
+            // Opcode available on data_in and reg_opcode
+            control.pc_increment = !opcode_1_byte;
 
-            byte2:
-                // Requesting byte after opcode byte
-                // Opcode available on data_in and reg_opcode
-                begin
-                    control.pc_increment = !opcode_1_byte;
-
-                    casez (data_in)
-                        8'b???_?01_??: next_state = zeropage1; // $00 or $00,X
-                        8'b???_?11_??: next_state = absolute1; // $0000 or $0000,X
-                        8'b???_?00_?1: next_state = zeropage1; // ($00,X) or ($00),Y
-                        8'b???_110_?1: next_state = absolute1; // $0000,Y
-                        8'b???_010_?1: next_state = byte1;     // immediate
-                        8'b???_?10_?0: next_state = byte1;     // implied or push/pull
-                        8'b???_100_00:                         // relative
-                            next_state = branch_taken ? branch1 : byte1;
-                        8'b1??_000_?0: next_state = byte1;     // immediate
-                        8'b0??_000_00: next_state = stack1;    // BRK/JSR/RTI/RTS
-                        8'b???_100_10: next_state = stuck;
-                        8'b0??_000_10: next_state = stuck;
-                    endcase
-                end
-
-            zeropage1:
-                // Read from zero page address
-                // ($00,X) or ($00),Y or $00 or $00,X
-                // xxx_x00_x1, xxx_x01_xx
-                //     00  20  40  60  80  a0  c0  e0
-                // 01  ORA AND EOR ADC STA LDA CMP SBC  ($00,X)
-                // 03  slo rla sre rra sax lax dcp isb  ($00,X)
-                // 04  nop BIT nop nop STY LDY CPY CPX  $00
-                // 05  ORA AND EOR ADC STA LDA CMP SBC  $00
-                // 06  ASL ROL LSR ROR STX LDX DEC INC  $00
-                // 07  slo rla sre rra sax lax dcp isb  $00
-                // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
-                // 13  slo rla sre rra sha lax dcp isb  ($00),Y
-                // 14  nop nop nop nop STY LDY nop nop  $00,X
-                // 15  ORA AND EOR ADC STA LDA CMP SBC  $00,X
-                // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
-                // 17  slo rla sre rra sax lax dcp isb  $00,X
-                begin
-                    control.addr_zp1 = 1;
-                    next_state
-                        = opcode_zeropage_x ? zeropage2 : // xxx_101_xx (14,15,16,17)
-                          opcode_indirect_x ? zeropage2 : // xxx_000_x1 (01,03)
-                          opcode_indirect_y ? indirect1 : // xxx_100_x1 (11,13)
-                          reg_opcode[1] ? modify1 :       // xxx_100_1x (06,07)
-                          byte1;                          // xxx_001_0x (04,05)
-                    if (opcode_indirect_x) begin
-                        // 01,03
-                        control.index_xy = 1;
+            casez (data_in)
+                8'b???_?01_??: next_state.zeropage1 = 1; // $00 or $00,X
+                8'b???_?11_??: next_state.absolute1 = 1; // $0000 or $0000,X
+                8'b???_?00_?1: next_state.zeropage1 = 1; // ($00,X) or ($00),Y
+                8'b???_110_?1: next_state.absolute1 = 1; // $0000,Y
+                8'b???_010_?1: next_state.byte1 = 1;     // immediate
+                8'b???_?10_?0: next_state.byte1 = 1;     // implied or push/pull
+                8'b???_100_00:                           // relative
+                    begin
+                        next_state.branch1 = branch_taken;
+                        next_state.byte1 = ~branch_taken;
                     end
-                    if (opcode_zeropage_x) begin
-                        // 14,15,16,17
-                        // 10x_101_1x have swapped (Y-indexed) addressing
-                        control.index_xy = 1;
-                        control.index_y = opcode_load_store & reg_opcode[1];
-                    end
+                8'b1??_000_?0: next_state.byte1 = 1;     // immediate
+                8'b0??_000_00: next_state.stack1 = 1;    // BRK/JSR/RTI/RTS
+                8'b???_100_10: begin end                 // stuck
+                8'b0??_000_10: begin end                 // stuck
+            endcase
+        end
+
+        if (reg_state.zeropage1)
+        begin
+            // Read from zero page address
+            // ($00,X) or ($00),Y or $00 or $00,X
+            // xxx_x00_x1, xxx_x01_xx
+            //     00  20  40  60  80  a0  c0  e0
+            // 01  ORA AND EOR ADC STA LDA CMP SBC  ($00,X)
+            // 03  slo rla sre rra sax lax dcp isb  ($00,X)
+            // 04  nop BIT nop nop STY LDY CPY CPX  $00
+            // 05  ORA AND EOR ADC STA LDA CMP SBC  $00
+            // 06  ASL ROL LSR ROR STX LDX DEC INC  $00
+            // 07  slo rla sre rra sax lax dcp isb  $00
+            // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
+            // 13  slo rla sre rra sha lax dcp isb  ($00),Y
+            // 14  nop nop nop nop STY LDY nop nop  $00,X
+            // 15  ORA AND EOR ADC STA LDA CMP SBC  $00,X
+            // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
+            // 17  slo rla sre rra sax lax dcp isb  $00,X
+
+            control.addr_zp1 = 1;
+
+            if (opcode_indirect_x)
+            begin
+                // 8'b???_000_?1
+                // 01,03
+                control.index_xy = 1;
+                next_state.zeropage2 = 1;
+            end
+            if (opcode_zeropage)
+            begin
+                // 8'b???_001_??
+                // 04,05,06,07
+                next_state.modify1 = opcode_rmw;
+                next_state.byte1 = ~opcode_rmw;
+            end
+            if (opcode_zeropage_x)
+            begin
+                // 8'b???_101_??
+                // 14,15,16,17
+                // 10x_101_1x have swapped (Y-indexed) addressing
+                control.index_xy = 1;
+                control.index_y = opcode_load_store & reg_opcode[1];
+                next_state.zeropage2 = 1;
+            end
+            if (opcode_indirect_y)
+            begin
+                // 8'b???_100_?1
+                // 11, 13
+                next_state.indirect1 = 1;
+            end
+        end
+
+        if (reg_state.zeropage2)
+        begin
+            // Read from zero page address + X
+            // xxx_000_x1, xxx_101_xx (01,03,14,15,16,17)
+            //     00  20  40  60  80  a0  c0  e0
+            // 01  ORA AND EOR ADC STA LDA CMP SBC  ($00,X)
+            // 03  slo rla sre rra sax lax dcp isb  ($00,X)
+            // 14  nop nop nop nop STY LDY nop nop  $00,X
+            // 15  ORA AND EOR ADC STA LDA CMP SBC  $00,X
+            // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
+            // 17  slo rla sre rra sax lax dcp isb  $00,X
+            control.addr_zp2 = 1;
+            next_state.indirect1 = opcode_indirect_x; // xxx_000_x1 (01,03)
+            next_state.byte1 = ~opcode_indirect_x;    // xxx_101_xx (14,15,16,17)
+        end
+
+        if (reg_state.absolute1)
+        begin
+            // Request the final byte of a 3-byte instruction
+            // data_in contains the low byte of a 16-bit address
+            // xxx_x11_xx, xxx_110_x1 (_c,_d,_e,_f,19,1b)
+            //     00  20  40  60  80  a0  c0  e0
+            // 0c  nop BIT JMP JMP'STY LDY CPY CPX  $0000
+            // 0d  ORA AND EOR ADC STA LDA CMP SBC  $0000
+            // 0e  ASL ROL LSR ROR STX LDX DEC INC  $0000
+            // 0f  slo rla sre rra sax lax dcp isb  $0000
+            // 19  ORA AND EOR ADC STA LDA CMP SBC  $0000,Y  1001
+            // 1b  slo rla sre rra shs lae dcp isb  $0000,Y  1011
+            // 1c  nop nop nop nop shy LDY nop nop  $0000,X  1100
+            // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X  1101
+            // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X  1110 (Y for shx/LDX)
+            // 1f  slo rla sre rra sha lax dcp isb  $0000,X  1111 (Y for sha/lax)
+            control.pc_increment = 1;
+            if (opcode_jmp_abs) begin
+                next_state.byte1 = 1;
+                control.pc_vector = 1;
+            end else begin
+                next_state.absolute2 = 1;
+            end
+            if (reg_opcode[4]) begin
+                // indexing 19,1b,1c,1d,1e,1f
+                if (reg_opcode[3]) begin
+                    // 1c,1d,1e,1f
+                    // 9e,9f,be,bf have swapped (Y-indexed) addressing
+                    control.index_xy = 1;
+                    control.index_y = opcode_load_store & reg_opcode[1];
+                end else begin
+                    // 19,1b
+                    control.index_xy = 1;
+                    control.index_y = 1;
                 end
+            end
+        end
 
-            zeropage2:
-                // Read from zero page address + X
-                // xxx_000_x1, xxx_101_xx (01,03,14,15,16,17)
-                //     00  20  40  60  80  a0  c0  e0
-                // 01  ORA AND EOR ADC STA LDA CMP SBC  ($00,X)
-                // 03  slo rla sre rra sax lax dcp isb  ($00,X)
-                // 14  nop nop nop nop STY LDY nop nop  $00,X
-                // 15  ORA AND EOR ADC STA LDA CMP SBC  $00,X
-                // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
-                // 17  slo rla sre rra sax lax dcp isb  $00,X
-                begin
-                    control.addr_zp2 = 1;
-                    next_state
-                        = opcode_indirect_x ? indirect1 : // xxx_000_x1 (01,03)
-                          byte1;                          // xxx_101_xx (14,15,16,17)
-                end
+        if (reg_state.absolute2)
+        begin
+            // data_in contains the high byte of a 16-bit address
+            // Read the high byte of a 16-bit address
+            // $0000 or $0000,X or $0000,Y
+            // xxx_x11_xx, xxx_110_x1 (_c,_d,_e,_f,19,1b)
+            //     00  20  40  60  80  a0  c0  e0
+            // 0c  nop BIT JMP JMP'STY LDY CPY CPX  $0000
+            // 0d  ORA AND EOR ADC STA LDA CMP SBC  $0000
+            // 0e  ASL ROL LSR ROR STX LDX DEC INC  $0000
+            // 0f  slo rla sre rra sax lax dcp isb  $0000
+            // 19  ORA AND EOR ADC STA LDA CMP SBC  $0000,Y
+            // 1b  slo rla sre rra shs lae dcp isb  $0000,Y
+            // 1c  nop nop nop nop shy LDY nop nop  $0000,X
+            // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X
+            // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X
+            // 1f  slo rla sre rra sha lax dcp isb  $0000,X
+            // state "indexed" only if address calculation carried
+            // or if the instruction was indexed write or modify
+            control.addr_abs = 1;
 
-            absolute1:
-                // Request the final byte of a 3-byte instruction
-                // data_in contains the low byte of a 16-bit address
-                // xxx_x11_xx, xxx_110_x1 (_c,_d,_e,_f,19,1b)
-                //     00  20  40  60  80  a0  c0  e0
-                // 0c  nop BIT JMP JMP'STY LDY CPY CPX  $0000
-                // 0d  ORA AND EOR ADC STA LDA CMP SBC  $0000
-                // 0e  ASL ROL LSR ROR STX LDX DEC INC  $0000
-                // 0f  slo rla sre rra sax lax dcp isb  $0000
-                // 19  ORA AND EOR ADC STA LDA CMP SBC  $0000,Y  1001
-                // 1b  slo rla sre rra shs lae dcp isb  $0000,Y  1011
-                // 1c  nop nop nop nop shy LDY nop nop  $0000,X  1100
-                // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X  1101
-                // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X  1110 (Y for shx/LDX)
-                // 1f  slo rla sre rra sha lax dcp isb  $0000,X  1111 (Y for sha/lax)
-                begin
-                    control.pc_increment = 1;
-                    if (opcode_jmp_abs) begin
-                        next_state = byte1;
-                        control.pc_vector = 1;
-                    end else begin
-                        next_state = absolute2;
-                    end
-                    if (reg_opcode[4]) begin
-                        // indexing 19,1b,1c,1d,1e,1f
-                        if (reg_opcode[3]) begin
-                            // 1c,1d,1e,1f
-                            // 9e,9f,be,bf have swapped (Y-indexed) addressing
-                            control.index_xy = 1;
-                            control.index_y = opcode_load_store & reg_opcode[1];
-                        end else begin
-                            // 19,1b
-                            control.index_xy = 1;
-                            control.index_y = 1;
-                        end
-                    end
-                end
+            if (reg_opcode[4]) begin
+                // indexed
+                // Read instructions go to state 'indexed' iff address carried
+                if (opcode_store | opcode_modify | reg_index[8])
+                    next_state.indexed = 1;
+                else
+                    next_state.byte1 = 1;
+            end
+            else begin
+                // not indexed
+                next_state.modify1 = opcode_modify;
+                next_state.byte1 = ~opcode_modify;
+            end
+        end
 
-            absolute2:
-                // data_in contains the high byte of a 16-bit address
-                // Read the high byte of a 16-bit address
-                // $0000 or $0000,X or $0000,Y
-                // xxx_x11_xx, xxx_110_x1 (_c,_d,_e,_f,19,1b)
-                //     00  20  40  60  80  a0  c0  e0
-                // 0c  nop BIT JMP JMP'STY LDY CPY CPX  $0000
-                // 0d  ORA AND EOR ADC STA LDA CMP SBC  $0000
-                // 0e  ASL ROL LSR ROR STX LDX DEC INC  $0000
-                // 0f  slo rla sre rra sax lax dcp isb  $0000
-                // 19  ORA AND EOR ADC STA LDA CMP SBC  $0000,Y
-                // 1b  slo rla sre rra shs lae dcp isb  $0000,Y
-                // 1c  nop nop nop nop shy LDY nop nop  $0000,X
-                // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X
-                // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X
-                // 1f  slo rla sre rra sha lax dcp isb  $0000,X
-                // state "indexed" only if address calculation carried
-                // or if the instruction was indexed write or modify
-                begin
-                    control.addr_abs = 1;
-                    if (reg_opcode[4]) begin
-                        // indexed
-                        // Read instructions go to state 'indexed' iff address carried
-                        var state maybe_indexed = reg_index[8] ? indexed : byte1;
-                        next_state
-                            = opcode_store ? indexed :
-                              opcode_load  ? maybe_indexed :
-                              opcode_rmw   ? indexed :
-                              maybe_indexed;
-                    end else begin
-                        // not indexed
-                        next_state = opcode_modify ? modify1 : byte1;
-                    end
-                end
+        if (reg_state.indirect1)
+        begin
+            // Read first byte of vector
+            // ($00,X) or ($00),Y
+            // xxx_x00_x1 (_1,_3)
+            //     00  20  40  60  80  a0  c0  e0
+            // 01  ORA AND EOR ADC STA LDA CMP SBC  ($00,X)
+            // 03  slo rla sre rra sax lax dcp isb  ($00,X)
+            // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
+            // 13  slo rla sre rra sha lax dcp isb  ($00),Y
+            control.addr_inc = 1;
+            next_state.indirect2 = 1;
+            if (reg_opcode[4]) begin
+                // ($00),Y (11,13)
+                control.index_xy = 1;
+                control.index_y = 1;
+            end
+        end
 
-            indirect1:
-                // Read first byte of vector
-                // ($00,X) or ($00),Y
-                // xxx_x00_x1 (_1,_3)
-                //     00  20  40  60  80  a0  c0  e0
-                // 01  ORA AND EOR ADC STA LDA CMP SBC  ($00,X)
-                // 03  slo rla sre rra sax lax dcp isb  ($00,X)
-                // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
-                // 13  slo rla sre rra sha lax dcp isb  ($00),Y
-                begin
-                    control.addr_inc = 1;
-                    next_state = indirect2;
-                    if (reg_opcode[4]) begin
-                        // ($00),Y (11,13)
-                        control.index_xy = 1;
-                        control.index_y = 1;
-                    end
-                end
+        if (reg_state.indirect2)
+        begin
+            // data_in contains the high byte of a 16-bit vector
+            // ($00,X) or ($00),Y
+            // xxx_x00_x1 (_1,_3)
+            //     00  20  40  60  80  a0  c0  e0
+            // 01  ORA AND EOR ADC STA LDA CMP SBC  ($00,X)
+            // 03  slo rla sre rra sax lax dcp isb  ($00,X)
+            // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
+            // 13  slo rla sre rra sha lax dcp isb  ($00),Y
+            control.addr_abs = 1;
+            // state "indexed" only if address calculation carried
+            // or if the instruction was indexed write or modify
+            if (reg_opcode[4]) begin
+                // ($00),Y
+                // Read instructions go to state 'indexed' iff address carried
+                if (opcode_store | opcode_modify | reg_index[8])
+                    next_state.indexed = 1;
+                else
+                    next_state.byte1 = 1;
+            end else begin
+                // ($00,X)
+                next_state.modify1 = opcode_modify;
+                next_state.byte1 = ~opcode_modify;
+            end
+        end
 
-            indirect2:
-                // Read second byte of vector
-                // ($00,X) or ($00),Y
-                // xxx_x00_x1 (_1,_3)
-                //     00  20  40  60  80  a0  c0  e0
-                // 01  ORA AND EOR ADC STA LDA CMP SBC  ($00,X)
-                // 03  slo rla sre rra sax lax dcp isb  ($00,X)
-                // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
-                // 13  slo rla sre rra sha lax dcp isb  ($00),Y
-                begin
-                    control.addr_abs = 1;
-                    // state "indexed" only if address calculation carried
-                    // or if the instruction was indexed write or modify
-                    if (reg_opcode[4]) begin
-                        // ($00),Y
-                        // Read instructions go to state 'indexed' iff address carried
-                        var state maybe_indexed = reg_index[8] ? indexed : byte1;
-                        next_state
-                            = opcode_store   ? indexed :
-                              opcode_load    ? maybe_indexed :
-                              opcode_rmw     ? modify1 :
-                              maybe_indexed;
-                    end else begin
-                        // ($00,X)
-                        next_state
-                            = opcode_load_store ? byte1 :
-                              opcode_rmw        ? modify1 :
-                              byte1;
-                    end
-                end
+        if (reg_state.indexed)
+        begin
+            // Propagate carry to high address byte and read again
+            // ($00),Y or $0000,Y or $0000,X
+            //     00  20  40  60  80  a0  c0  e0
+            // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
+            // 13  slo rla sre rra sha lax dcp isb  ($00),Y
+            // 19  ORA AND EOR ADC STA LDA CMP SBC  $0000,Y
+            // 1b  slo rla sre rra shs lae dcp isb  $0000,Y
+            // 1c  nop nop nop nop shy LDY nop nop  $0000,X
+            // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X
+            // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X
+            // 1f  slo rla sre rra sha lax dcp isb  $0000,X
+            control.addr_carry = 1;
+            if (opcode_modify) next_state.modify1 = 1;
+            else next_state.byte1 = 1;
+        end
 
-            indexed:
-                // Propagate carry to high address byte and read again
-                // ($00),Y or $0000,Y or $0000,X
-                //     00  20  40  60  80  a0  c0  e0
-                // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
-                // 13  slo rla sre rra sha lax dcp isb  ($00),Y
-                // 19  ORA AND EOR ADC STA LDA CMP SBC  $0000,Y
-                // 1b  slo rla sre rra shs lae dcp isb  $0000,Y
-                // 1c  nop nop nop nop shy LDY nop nop  $0000,X
-                // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X
-                // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X
-                // 1f  slo rla sre rra sha lax dcp isb  $0000,X
-                begin
-                    control.addr_carry = 1;
-                    next_state
-                        = opcode_load_store ? byte1 :
-                          opcode_rmw        ? modify1 :
-                          byte1;
-                end
+        if (reg_state.modify1)
+        begin
+            next_state.modify2 = 1;
+            control.addr_hold = 1;
+            control.write_enable = 1;
+            control.write_same = 1;
+        end
 
-            modify1:
-                begin
-                    next_state = modify2;
-                    control.addr_hold = 1;
-                    control.write_enable = 1;
-                    control.write_same = 1;
-                end
+        if (reg_state.modify2)
+        begin
+            next_state.byte1 = 1;
+            control.addr_hold = 1;
+            control.write_enable = 1;
+            control.write_rmw = 1;
+        end
 
-            modify2:
-                begin
-                    next_state = byte1;
-                    control.addr_hold = 1;
-                    control.write_enable = 1;
-                    control.write_rmw = 1;
-                end
+        if (reg_state.branch1)
+        begin
+            // Adjust low byte of PC for branch
+            // xxx_100_00 (10)
+            // 10  BPL BMI BVC BVS BCC BCS BNE BEQ
+            // 12   -   -   -   -   -   -   -   -
+            control.pc_branch1 = 1;
+            if (branch_result[9:8] == 2'b00)
+                next_state.byte1 = 1;
+            else
+                next_state.branch2 = 1;
+        end
 
-            branch1:
-                // Adjust low byte of PC for branch
-                // xxx_100_00 (10)
-                // 10  BPL BMI BVC BVS BCC BCS BNE BEQ
-                // 12   -   -   -   -   -   -   -   -
-                begin
-                    control.pc_branch1 = 1;
-                    if (branch_result[9:8] == 2'b00)
-                        next_state = byte1;
-                    else
-                        next_state = branch2;
-                end
+        if (reg_state.branch2)
+        begin
+            // Fixup high byte of PC for branch
+            control.pc_branch2 = 1;
+            next_state.byte1 = 1;
+        end
 
-            branch2:
-                // Fixup high byte of PC for branch
-                begin
-                    control.pc_branch2 = 1;
-                    next_state = byte1;
-                end
+        if (reg_state.stack1)
+        begin
+            // BRK JSR RTI RTS
+            // maybe we should have PHP PLP PHA PLA in this state too
+            next_state.stack2 = 1;
+        end
 
-            stack1:
-                // BRK JSR RTI RTS
-                // maybe we should have PHP PLP PHA PLA in this state too
-                begin
-                    next_state = stack2;
-                end
+        if (reg_state.stack2)
+        begin
+        end
 
-            stack2:
-                begin
-                end
+        if (reg_state.stack3)
+        begin
+        end
 
-            stack3:
-                begin
-                end
-
-            stuck:
-                begin
-                    next_state = stuck;
-                end
-
-        endcase // case (reg_state)
-
-        if (opcode_store & (next_state == byte1)) begin
+        if (opcode_store & next_state.byte1) begin
             // FIXME: suppress write if the instruction is immediate mode
             control.write_enable = 1;
             control.write_store = 1;
@@ -671,11 +674,11 @@ module cpu6502
         if (reset) begin
             reg_pc <= 16'hfffc;
             reg_opcode <= 8'h6c; // JMP ($fffc)
-            reg_state <= absolute1;
+            reg_state <= '{ absolute1: 1, default: 0 };
         end
 
         else if (io_enable) begin
-            if (reg_state == byte2) begin
+            if (reg_state.byte2) begin
                 reg_opcode <= data_in;
             end
             reg_pc     <= next_pc;
@@ -709,7 +712,7 @@ module cpu6502
     assign io_address      = address_out;
     assign io_data_out     = data_out;
     assign io_write_enable = control.write_enable;
-    assign io_sync         = (reg_state == byte1);
+    assign io_sync         = reg_state.byte1;
 
     assign io_debug_opcode = reg_opcode;
     assign io_debug_pc     = reg_pc;
