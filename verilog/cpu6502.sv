@@ -29,7 +29,6 @@ module cpu6502
         logic absolute1;
         logic absolute2;
         logic indirect1;
-        logic indirect2;
         logic indexed;
         logic modify1;
         logic modify2;
@@ -479,21 +478,25 @@ module cpu6502
 
         if (reg_state.absolute2)
         begin
-            // data_in contains the high byte of a 16-bit address
-            // Read the high byte of a 16-bit address
-            // $0000 or $0000,X or $0000,Y
-            // xxx_x11_xx, xxx_110_x1 (_c,_d,_e,_f,19,1b)
+            // Read from 16-bit address (plus offset, if any)
+            // reg_index contains LSB, data_in contains MSB
+            // $0000 or $0000,X or $0000,Y or ($00,X) or ($00),Y
+            // xxx_x00_x1, xxx_x11_xx, xxx_110_x1 (_1,_3,_c,_d,_e,_f,19,1b)
             //     00  20  40  60  80  a0  c0  e0
+            // 01  ORA AND EOR ADC STA LDA CMP SBC  ($00,X)
+            // 03  slo rla sre rra sax lax dcp isb  ($00,X) (rmw)
             // 0c  nop BIT JMP JMP'STY LDY CPY CPX  $0000
             // 0d  ORA AND EOR ADC STA LDA CMP SBC  $0000
-            // 0e  ASL ROL LSR ROR STX LDX DEC INC  $0000
-            // 0f  slo rla sre rra sax lax dcp isb  $0000
+            // 0e  ASL ROL LSR ROR STX LDX DEC INC  $0000   (rmw)
+            // 0f  slo rla sre rra sax lax dcp isb  $0000   (rmw)
+            // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
+            // 13  slo rla sre rra sha lax dcp isb  ($00),Y (rmw)
             // 19  ORA AND EOR ADC STA LDA CMP SBC  $0000,Y
-            // 1b  slo rla sre rra shs lae dcp isb  $0000,Y
+            // 1b  slo rla sre rra shs lae dcp isb  $0000,Y (rmw)
             // 1c  nop nop nop nop shy LDY nop nop  $0000,X
             // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X
-            // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X
-            // 1f  slo rla sre rra sha lax dcp isb  $0000,X
+            // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X (rmw)
+            // 1f  slo rla sre rra sha lax dcp isb  $0000,X (rmw)
             // state "indexed" only if address calculation carried
             // or if the instruction was indexed write or modify
             control.addr_abs = 1;
@@ -524,38 +527,11 @@ module cpu6502
             // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
             // 13  slo rla sre rra sha lax dcp isb  ($00),Y
             control.addr_inc = 1;
-            next_state.indirect2 = 1;
+            next_state.absolute2 = 1;
             if (reg_opcode[4]) begin
                 // ($00),Y (11,13)
                 control.index_xy = 1;
                 control.index_y = 1;
-            end
-        end
-
-        if (reg_state.indirect2)
-        begin
-            // data_in contains the high byte of a 16-bit vector
-            // ($00,X) or ($00),Y
-            // xxx_x00_x1 (_1,_3)
-            //     00  20  40  60  80  a0  c0  e0
-            // 01  ORA AND EOR ADC STA LDA CMP SBC  ($00,X)
-            // 03  slo rla sre rra sax lax dcp isb  ($00,X)
-            // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
-            // 13  slo rla sre rra sha lax dcp isb  ($00),Y
-            control.addr_abs = 1;
-            // state "indexed" only if address calculation carried
-            // or if the instruction was indexed write or modify
-            if (reg_opcode[4]) begin
-                // ($00),Y
-                // Read instructions go to state 'indexed' iff address carried
-                if (opcode_store | opcode_modify | reg_index[8])
-                    next_state.indexed = 1;
-                else
-                    next_state.byte1 = 1;
-            end else begin
-                // ($00,X)
-                next_state.modify1 = opcode_modify;
-                next_state.byte1 = ~opcode_modify;
             end
         end
 
