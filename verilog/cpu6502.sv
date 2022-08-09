@@ -334,20 +334,17 @@ module cpu6502
         logic addr_inc;      // ADH unchanged, increment ADL
         logic addr_carry;    // ADH += indexing carry, ADL unchanged
         logic write_enable;  // 0 = read, 1 = write
+        logic write_same;    // copy data_out from data_in
+        logic write_rmw;     // write data from rmw unit
+        logic write_store;   // write data from store instruction
     } control;
 
     // State machine
-    var logic [7:0]  data_out;
     var state        next_state;
 
     always_comb begin
         // Default all control signals to 0
         control = '{ default: 0 };
-
-        // Default to reading from memory
-        data_out = 0;
-        // Writes could happen from states zeropage1, zeropage2, absolute2, indirect2 or indexed.
-        // Writes will happen from states modify1 and modify2.
 
         // Default to no address indexing calculation
         offset = 0;
@@ -581,7 +578,7 @@ module cpu6502
                     next_state = modify2;
                     control.addr_hold = 1;
                     control.write_enable = 1;
-                    data_out = data_in;
+                    control.write_same = 1;
                 end
 
             modify2:
@@ -589,7 +586,7 @@ module cpu6502
                     next_state = byte1;
                     control.addr_hold = 1;
                     control.write_enable = 1;
-                    data_out = rmw_out;
+                    control.write_rmw = 1;
                 end
 
             branch1:
@@ -637,7 +634,7 @@ module cpu6502
         if (opcode_store & (next_state == byte1)) begin
             // FIXME: suppress write if the instruction is immediate mode
             control.write_enable = 1;
-            data_out = store_out;
+            control.write_store = 1;
         end
     end
 
@@ -661,6 +658,13 @@ module cpu6502
         control.addr_inc   ? {reg_addr[15:8], reg_addr[7:0] + 8'h1} :
         control.addr_carry ? {reg_addr[15:8] + 8'(reg_index[8]), reg_addr[7:0]} :
         reg_pc;
+
+    // Data out
+    uwire logic [7:0] data_out =
+        control.write_same  ? data_in :
+        control.write_rmw   ? rmw_out :
+        control.write_store ? store_out :
+        8'h00;
 
     // Register updates
     always_ff @(posedge clock) begin
