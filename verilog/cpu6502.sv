@@ -22,16 +22,16 @@ module cpu6502
 
     // State type
     typedef struct packed {
-        logic byte1;
-        logic byte2;
-        logic zeropage1;
-        logic zeropage2;
-        logic absolute1;
-        logic absolute2;
-        logic indirect1;
-        logic indexed;
-        logic modify1;
-        logic modify2;
+        logic byte1;       // Read 1st instruction byte (opcode)
+        logic byte2;       // Read 2nd instruction byte (low arg)
+        logic byte3;       // Read 3rd instruction byte (high arg)
+        logic zeropage1;   // Read from zero-page address
+        logic zeropage2;   // Read from zero-page address plus offset
+        logic absolute;    // Read from 16-bit address (plus offset, if any)
+        logic indirect;    // Read from 2nd half of indirect vector
+        logic fixpage;     // Read from 16-bit address with fixed-up page
+        logic modify1;     // First write cycle of RMW instruction
+        logic modify2;     // Second write cycle of RMW instruction
         logic branch1;
         logic branch2;
         logic stack1;
@@ -353,9 +353,9 @@ module cpu6502
 
             casez (data_in)
                 8'b???_?01_??: next_state.zeropage1 = 1; // $00 or $00,X
-                8'b???_?11_??: next_state.absolute1 = 1; // $0000 or $0000,X
+                8'b???_?11_??: next_state.byte3 = 1;     // $0000 or $0000,X
                 8'b???_?00_?1: next_state.zeropage1 = 1; // ($00,X) or ($00),Y
-                8'b???_110_?1: next_state.absolute1 = 1; // $0000,Y
+                8'b???_110_?1: next_state.byte3 = 1;     // $0000,Y
                 8'b???_010_?1: next_state.byte1 = 1;     // immediate
                 8'b???_?10_?0: next_state.byte1 = 1;     // implied or push/pull
                 8'b???_100_00:                           // relative
@@ -418,7 +418,7 @@ module cpu6502
             begin
                 // 8'b???_100_?1
                 // 11, 13
-                next_state.indirect1 = 1;
+                next_state.indirect = 1;
             end
         end
 
@@ -434,11 +434,11 @@ module cpu6502
             // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
             // 17  slo rla sre rra sax lax dcp isb  $00,X
             control.addr_zp2 = 1;
-            next_state.indirect1 = opcode_indirect_x; // xxx_000_x1 (01,03)
+            next_state.indirect = opcode_indirect_x; // xxx_000_x1 (01,03)
             next_state.byte1 = ~opcode_indirect_x;    // xxx_101_xx (14,15,16,17)
         end
 
-        if (reg_state.absolute1)
+        if (reg_state.byte3)
         begin
             // Request the final byte of a 3-byte instruction
             // data_in contains the low byte of a 16-bit address
@@ -459,7 +459,7 @@ module cpu6502
                 next_state.byte1 = 1;
                 control.pc_vector = 1;
             end else begin
-                next_state.absolute2 = 1;
+                next_state.absolute = 1;
             end
             if (reg_opcode[4]) begin
                 // indexing 19,1b,1c,1d,1e,1f
@@ -476,7 +476,7 @@ module cpu6502
             end
         end
 
-        if (reg_state.absolute2)
+        if (reg_state.absolute)
         begin
             // Read from 16-bit address (plus offset, if any)
             // reg_index contains LSB, data_in contains MSB
@@ -497,15 +497,15 @@ module cpu6502
             // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X
             // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X (rmw)
             // 1f  slo rla sre rra sha lax dcp isb  $0000,X (rmw)
-            // state "indexed" only if address calculation carried
+            // state "fixpage" only if address calculation carried
             // or if the instruction was indexed write or modify
             control.addr_abs = 1;
 
             if (reg_opcode[4]) begin
                 // indexed
-                // Read instructions go to state 'indexed' iff address carried
+                // Read instructions go to state 'fixpage' iff address carried
                 if (opcode_store | opcode_modify | reg_index[8])
-                    next_state.indexed = 1;
+                    next_state.fixpage = 1;
                 else
                     next_state.byte1 = 1;
             end
@@ -516,7 +516,7 @@ module cpu6502
             end
         end
 
-        if (reg_state.indirect1)
+        if (reg_state.indirect)
         begin
             // Read first byte of vector
             // ($00,X) or ($00),Y
@@ -527,7 +527,7 @@ module cpu6502
             // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
             // 13  slo rla sre rra sha lax dcp isb  ($00),Y
             control.addr_inc = 1;
-            next_state.absolute2 = 1;
+            next_state.absolute = 1;
             if (reg_opcode[4]) begin
                 // ($00),Y (11,13)
                 control.index_xy = 1;
@@ -535,7 +535,7 @@ module cpu6502
             end
         end
 
-        if (reg_state.indexed)
+        if (reg_state.fixpage)
         begin
             // Propagate carry to high address byte and read again
             // ($00),Y or $0000,Y or $0000,X
@@ -650,7 +650,7 @@ module cpu6502
         if (reset) begin
             reg_pc <= 16'hfffc;
             reg_opcode <= 8'h6c; // JMP ($fffc)
-            reg_state <= '{ absolute1: 1, default: 0 };
+            reg_state <= '{ byte3: 1, default: 0 };
         end
 
         else if (io_enable) begin
