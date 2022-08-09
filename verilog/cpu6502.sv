@@ -660,7 +660,7 @@ module cpu6502
 
         else if (io_enable) begin
             if (reg_state.byte1) begin
-                reg_opcode <= data_in;
+                reg_opcode <= io_data_in;
             end
             reg_pc     <= next_pc;
             reg_a      <= next_a;
