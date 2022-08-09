@@ -320,7 +320,7 @@ module cpu6502
     end
 
     // Control signals
-    struct {
+    var struct packed {
         logic pc_increment;  // increment pc by 1
         logic pc_branch1;    // set pcl to result of branch index calculation
         logic pc_branch2;    // set pch to fixup branch page carry
