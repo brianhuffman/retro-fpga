@@ -328,20 +328,19 @@ module cpu6502
         // TODO: implement PLA
     end
 
+    // Control signals
+    struct {
+        logic pc_increment;  // increment pc by 1
+        logic pc_branch1;    // set pcl to result of branch index calculation
+        logic pc_branch2;    // set pch to fixup branch page carry
+        logic pc_vector;     // set pc from last two bytes read
+        logic write_enable;  // 0 = read, 1 = write
+    } control;
+
     // State machine
-    var logic [15:0] next_pc;
-    var logic        pc_increment;
     var logic [15:0] address_out;
-    var logic        write_enable;
     var logic [7:0]  data_out;
     var state        next_state;
-
-    // Possible values for next_pc
-    uwire logic [15:0] pc_inc = reg_pc + 16'(pc_increment);
-    uwire logic [15:0] pc_branch1 = {reg_pc[15:8], branch_result[7:0]};
-    uwire logic [7:0]  branch_carry = {{7{reg_branch[9]}}, reg_branch[8]};
-    uwire logic [15:0] pc_branch2 = {reg_pc[15:8] + branch_carry, reg_pc[7:0]};
-    uwire logic [15:0] pc_jmp = {io_data_in, reg_data_in};
 
     // Possible values for address_out
     uwire logic [15:0] addr_stack = {8'h01, reg_s};
@@ -356,18 +355,16 @@ module cpu6502
     uwire logic [15:0] addr_carry = {reg_addr[15:8] + {7'h0, reg_index[8]}, reg_addr[7:0]};
 
     always_comb begin
+        // Default all control signals to 0
+        control = '{ default: 0 };
+
         // Default to reading from memory
-        write_enable = 0;
         data_out = 0;
         // Writes could happen from states zeropage1, zeropage2, absolute2, indirect2 or indexed.
         // Writes will happen from states modify1 and modify2.
 
         // Default to no address indexing calculation
         offset = 0;
-        // Default to no PC increment
-        pc_increment = 0;
-        // Default PC to using incrementer
-        next_pc = pc_inc;
         // Default address_out to PC
         address_out = reg_pc;
 
@@ -377,14 +374,14 @@ module cpu6502
                 // Requesting opcode byte
                 begin
                     next_state = byte2;
-                    pc_increment = 1;
+                    control.pc_increment = 1;
                 end
 
             byte2:
                 // Requesting byte after opcode byte
                 // Opcode available on data_in and reg_opcode
                 begin
-                    pc_increment = !opcode_1_byte;
+                    control.pc_increment = !opcode_1_byte;
 
                     casez (data_in)
                         8'b???_?01_??: next_state = zeropage1; // $00 or $00,X
@@ -471,10 +468,10 @@ module cpu6502
                 // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X  1110 (Y for shx/LDX)
                 // 1f  slo rla sre rra sha lax dcp isb  $0000,X  1111 (Y for sha/lax)
                 begin
-                    pc_increment = 1;
+                    control.pc_increment = 1;
                     if (opcode_jmp_abs) begin
                         next_state = byte1;
-                        next_pc = pc_jmp;
+                        control.pc_vector = 1;
                     end else begin
                         next_state = absolute2;
                     end
@@ -599,7 +596,7 @@ module cpu6502
                 begin
                     next_state = modify2;
                     address_out = addr_hold;
-                    write_enable = 1;
+                    control.write_enable = 1;
                     data_out = data_in;
                 end
 
@@ -607,7 +604,7 @@ module cpu6502
                 begin
                     next_state = byte1;
                     address_out = addr_hold;
-                    write_enable = 1;
+                    control.write_enable = 1;
                     data_out = rmw_out;
                 end
 
@@ -617,7 +614,7 @@ module cpu6502
                 // 10  BPL BMI BVC BVS BCC BCS BNE BEQ
                 // 12   -   -   -   -   -   -   -   -
                 begin
-                    next_pc = pc_branch1;
+                    control.pc_branch1 = 1;
                     if (branch_result[9:8] == 2'b00)
                         next_state = byte1;
                     else
@@ -627,7 +624,7 @@ module cpu6502
             branch2:
                 // Fixup high byte of PC for branch
                 begin
-                    next_pc = pc_branch2;
+                    control.pc_branch2 = 1;
                     next_state = byte1;
                 end
 
@@ -655,10 +652,19 @@ module cpu6502
 
         if (opcode_store & (next_state == byte1)) begin
             // FIXME: suppress write if the instruction is immediate mode
-            write_enable = 1;
+            control.write_enable = 1;
             data_out = store_out;
         end
     end
+
+    // Program counter
+    uwire logic [15:0] pc_inc = reg_pc + 16'(control.pc_increment);
+    uwire logic [7:0]  branch_carry = {{7{reg_branch[9]}}, reg_branch[8]};
+    uwire logic [15:0] next_pc =
+        control.pc_branch1 ? {reg_pc[15:8], branch_result[7:0]} :
+        control.pc_branch2 ? {reg_pc[15:8] + branch_carry, reg_pc[7:0]} :
+        control.pc_vector  ? {io_data_in, reg_data_in} :
+        pc_inc;
 
     // Register updates
     always_ff @(posedge clock) begin
@@ -691,7 +697,7 @@ module cpu6502
 
             // after we've done a write, data_in should reflect the
             // previous data_out.
-            if (write_enable) begin
+            if (control.write_enable) begin
                 reg_data_in <= data_out;
             end else begin
                 reg_data_in <= io_data_in;
@@ -702,7 +708,7 @@ module cpu6502
     // Module outputs
     assign io_address      = address_out;
     assign io_data_out     = data_out;
-    assign io_write_enable = write_enable;
+    assign io_write_enable = control.write_enable;
     assign io_sync         = (reg_state == byte1);
 
     assign io_debug_opcode = reg_opcode;
