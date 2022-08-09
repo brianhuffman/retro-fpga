@@ -604,8 +604,11 @@ module cpu6502
         begin
         end
 
-        if (opcode_store & next_state.byte1) begin
-            // FIXME: suppress write if the instruction is immediate mode
+        if (opcode_store
+           & next_state.byte1
+           & !(reg_opcode ==? 8'b???_??0_?0)
+           & !(reg_opcode ==? 8'b???_010_?1))
+        begin
             control.write_enable = 1;
             control.write_store = 1;
         end
