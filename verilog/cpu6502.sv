@@ -108,9 +108,6 @@ module cpu6502
     uwire logic opcode_3_byte       = opcode_absolute_any | opcode_absolute_y;
     uwire logic opcode_modify       = opcode_rmw & !opcode_load_store;
 
-    // Intermediate values
-    var logic [7:0] offset; // for address calculations
-
     // Conditional branches (opcode xxx_100_00)
     // 000 = BPL, 001 = BMI
     // 010 = BVC, 011 = BVS
@@ -128,12 +125,6 @@ module cpu6502
         endcase // case (reg_opcode[7:6])
         branch_taken = (flag == reg_opcode[5]);
         branch_result = {2'b0, reg_pc[7:0]} + {{2{data_in[7]}}, data_in};
-    end
-
-    // Indexed address calculations
-    var logic [8:0] next_index;
-    always_comb begin
-        next_index = data_in + offset;
     end
 
     // ALU inputs are A, B, op, carry_in, decimal
@@ -337,6 +328,8 @@ module cpu6502
         logic write_same;    // copy data_out from data_in
         logic write_rmw;     // write data from rmw unit
         logic write_store;   // write data from store instruction
+        logic index_xy;      // index with x or y register
+        logic index_y;       // index with y register
     } control;
 
     // State machine
@@ -345,9 +338,6 @@ module cpu6502
     always_comb begin
         // Default all control signals to 0
         control = '{ default: 0 };
-
-        // Default to no address indexing calculation
-        offset = 0;
 
         unique case (reg_state)
 
@@ -407,12 +397,13 @@ module cpu6502
                           byte1;                          // xxx_001_0x (04,05)
                     if (opcode_indirect_x) begin
                         // 01,03
-                        offset = reg_x;
+                        control.index_xy = 1;
                     end
                     if (opcode_zeropage_x) begin
                         // 14,15,16,17
                         // 10x_101_1x have swapped (Y-indexed) addressing
-                        offset = (opcode_load_store & reg_opcode[1]) ? reg_y : reg_x;
+                        control.index_xy = 1;
+                        control.index_y = opcode_load_store & reg_opcode[1];
                     end
                 end
 
@@ -461,10 +452,12 @@ module cpu6502
                         if (reg_opcode[3]) begin
                             // 1c,1d,1e,1f
                             // 9e,9f,be,bf have swapped (Y-indexed) addressing
-                            offset = (opcode_load_store & reg_opcode[1]) ? reg_y : reg_x;
+                            control.index_xy = 1;
+                            control.index_y = opcode_load_store & reg_opcode[1];
                         end else begin
                             // 19,1b
-                            offset = reg_y;
+                            control.index_xy = 1;
+                            control.index_y = 1;
                         end
                     end
                 end
@@ -518,7 +511,8 @@ module cpu6502
                     next_state = indirect2;
                     if (reg_opcode[4]) begin
                         // ($00),Y (11,13)
-                        offset = reg_y;
+                        control.index_xy = 1;
+                        control.index_y = 1;
                     end
                 end
 
@@ -646,6 +640,12 @@ module cpu6502
         control.pc_branch2 ? {reg_pc[15:8] + branch_carry, reg_pc[7:0]} :
         control.pc_vector  ? {io_data_in, reg_data_in} :
         pc_inc;
+
+    // Indexing calculations
+    uwire logic [7:0] index = control.index_y ? reg_y : reg_x;
+    uwire logic [7:0] offset = control.index_xy ? index : 8'h00;
+    // 9-bit value includes carry bit
+    uwire logic [8:0] next_index = data_in + offset;
 
     // Bus address
     uwire logic [15:0] address_out =
