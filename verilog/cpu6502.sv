@@ -48,6 +48,7 @@ module cpu6502
     var state        reg_state;
     var logic [15:0] reg_addr;
     var logic [8:0]  reg_index; // result of address index calculation, with carry
+    var logic [7:0]  reg_fixpage; // high byte of address index calculation
     var logic [9:0]  reg_branch; // result of branch target calculation, with carry
     var logic [7:0]  reg_data_in; // registered input
     // TODO: registered input for irq, nmi, set_overflow
@@ -628,6 +629,7 @@ module cpu6502
     uwire logic [7:0] offset = control.index_xy ? index : 8'h00;
     // 9-bit value includes carry bit
     uwire logic [8:0] next_index = data_in + offset;
+    uwire logic [7:0] next_fixpage = data_in + reg_index[8];
 
     // Bus address
     uwire logic [15:0] address_out =
@@ -638,7 +640,7 @@ module cpu6502
         control.addr_fffe  ? 16'hfffe :
         control.addr_hold  ? reg_addr :
         control.addr_inc   ? {reg_addr[15:8], reg_addr[7:0] + 8'h1} :
-        control.addr_carry ? {reg_addr[15:8] + 8'(reg_index[8]), reg_addr[7:0]} :
+        control.addr_carry ? {reg_fixpage, reg_addr[7:0]} :
         reg_pc;
 
     // Data out
@@ -675,6 +677,7 @@ module cpu6502
             reg_state  <= next_state;
             reg_addr   <= address_out;
             reg_index  <= next_index;
+            reg_fixpage <= next_fixpage;
             reg_branch <= branch_result;
 
             // after we've done a write, data_in should reflect the
