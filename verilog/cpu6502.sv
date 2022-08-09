@@ -136,15 +136,6 @@ module cpu6502
         next_index = data_in + offset;
     end
 
-    // Address generation
-    //uwire logic [15:0] addr_pc    = new_pc;
-    //uwire logic [15:0] addr_zp    = {8'h00, data_in};
-    //uwire logic [15:0] addr_zpx   = {8'h00, reg_index[7:0]};
-    //uwire logic [15:0] addr_index = {data_in, reg_index[7:0]};
-    //uwire logic [15:0] addr_hold  = reg_addr;
-    //uwire logic [15:0] addr_inc_page = {reg_addr[15:8] + 8'h1, reg_addr[7:0]};
-    //uwire logic [15:0] addr_dec_page = {reg_addr[15:8] - 8'h1, reg_addr[7:0]};
-
     // ALU inputs are A, B, op, carry_in, decimal
     // ALU outputs are result, overflow, carry
 
@@ -334,25 +325,20 @@ module cpu6502
         logic pc_branch1;    // set pcl to result of branch index calculation
         logic pc_branch2;    // set pch to fixup branch page carry
         logic pc_vector;     // set pc from last two bytes read
+        logic addr_stack;    // ADH = 01, ADL = S
+        logic addr_zp1;      // ADH = 00, ADL = data_in
+        logic addr_zp2;      // ADH = 00, ADL = indexed
+        logic addr_abs;      // ADH = data_in, ADL = indexed
+        logic addr_fffe;     // address = $fffe
+        logic addr_hold;     // keep address unchanged
+        logic addr_inc;      // ADH unchanged, increment ADL
+        logic addr_carry;    // ADH += indexing carry, ADL unchanged
         logic write_enable;  // 0 = read, 1 = write
     } control;
 
     // State machine
-    var logic [15:0] address_out;
     var logic [7:0]  data_out;
     var state        next_state;
-
-    // Possible values for address_out
-    uwire logic [15:0] addr_stack = {8'h01, reg_s};
-    uwire logic [15:0] addr_zp1   = {8'h00, data_in};
-    uwire logic [15:0] addr_zp2   = {8'h00, reg_index[7:0]};
-    uwire logic [15:0] addr_abs   = {data_in, reg_index[7:0]};
-    uwire logic [15:0] addr_fffe  = 16'hfffe;
-    uwire logic [15:0] addr_hold  = reg_addr;
-    uwire logic [15:0] addr_inc   = {reg_addr[15:8], reg_addr[7:0] + 8'h1};
-    uwire logic [15:0] addr_inc_page = {reg_addr[15:8] + 8'h1, reg_addr[7:0]};
-    uwire logic [15:0] addr_dec_page = {reg_addr[15:8] - 8'h1, reg_addr[7:0]};
-    uwire logic [15:0] addr_carry = {reg_addr[15:8] + {7'h0, reg_index[8]}, reg_addr[7:0]};
 
     always_comb begin
         // Default all control signals to 0
@@ -365,8 +351,6 @@ module cpu6502
 
         // Default to no address indexing calculation
         offset = 0;
-        // Default address_out to PC
-        address_out = reg_pc;
 
         unique case (reg_state)
 
@@ -417,7 +401,7 @@ module cpu6502
                 // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
                 // 17  slo rla sre rra sax lax dcp isb  $00,X
                 begin
-                    address_out = addr_zp1;
+                    control.addr_zp1 = 1;
                     next_state
                         = opcode_zeropage_x ? zeropage2 : // xxx_101_xx (14,15,16,17)
                           opcode_indirect_x ? zeropage2 : // xxx_000_x1 (01,03)
@@ -446,7 +430,7 @@ module cpu6502
                 // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
                 // 17  slo rla sre rra sax lax dcp isb  $00,X
                 begin
-                    address_out = addr_zp2;
+                    control.addr_zp2 = 1;
                     next_state
                         = opcode_indirect_x ? indirect1 : // xxx_000_x1 (01,03)
                           byte1;                          // xxx_101_xx (14,15,16,17)
@@ -507,7 +491,7 @@ module cpu6502
                 // state "indexed" only if address calculation carried
                 // or if the instruction was indexed write or modify
                 begin
-                    address_out = addr_abs;
+                    control.addr_abs = 1;
                     if (reg_opcode[4]) begin
                         // indexed
                         // Read instructions go to state 'indexed' iff address carried
@@ -533,7 +517,7 @@ module cpu6502
                 // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
                 // 13  slo rla sre rra sha lax dcp isb  ($00),Y
                 begin
-                    address_out = addr_inc;
+                    control.addr_inc = 1;
                     next_state = indirect2;
                     if (reg_opcode[4]) begin
                         // ($00),Y (11,13)
@@ -551,7 +535,7 @@ module cpu6502
                 // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
                 // 13  slo rla sre rra sha lax dcp isb  ($00),Y
                 begin
-                    address_out = addr_abs;
+                    control.addr_abs = 1;
                     // state "indexed" only if address calculation carried
                     // or if the instruction was indexed write or modify
                     if (reg_opcode[4]) begin
@@ -585,7 +569,7 @@ module cpu6502
                 // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X
                 // 1f  slo rla sre rra sha lax dcp isb  $0000,X
                 begin
-                    address_out = addr_carry;
+                    control.addr_carry = 1;
                     next_state
                         = opcode_load_store ? byte1 :
                           opcode_rmw        ? modify1 :
@@ -595,7 +579,7 @@ module cpu6502
             modify1:
                 begin
                     next_state = modify2;
-                    address_out = addr_hold;
+                    control.addr_hold = 1;
                     control.write_enable = 1;
                     data_out = data_in;
                 end
@@ -603,7 +587,7 @@ module cpu6502
             modify2:
                 begin
                     next_state = byte1;
-                    address_out = addr_hold;
+                    control.addr_hold = 1;
                     control.write_enable = 1;
                     data_out = rmw_out;
                 end
@@ -665,6 +649,18 @@ module cpu6502
         control.pc_branch2 ? {reg_pc[15:8] + branch_carry, reg_pc[7:0]} :
         control.pc_vector  ? {io_data_in, reg_data_in} :
         pc_inc;
+
+    // Bus address
+    uwire logic [15:0] address_out =
+        control.addr_stack ? {8'h01, reg_s} :
+        control.addr_zp1   ? {8'h00, data_in} :
+        control.addr_zp2   ? {8'h00, reg_index[7:0]} :
+        control.addr_abs   ? {data_in, reg_index[7:0]} :
+        control.addr_fffe  ? 16'hfffe :
+        control.addr_hold  ? reg_addr :
+        control.addr_inc   ? {reg_addr[15:8], reg_addr[7:0] + 8'h1} :
+        control.addr_carry ? {reg_addr[15:8] + 8'(reg_index[8]), reg_addr[7:0]} :
+        reg_pc;
 
     // Register updates
     always_ff @(posedge clock) begin
