@@ -464,7 +464,7 @@ module cpu6502
             end
             if (reg_opcode[4]) begin
                 // indexing 19,1b,1c,1d,1e,1f
-                if (reg_opcode[3]) begin
+                if (reg_opcode[2]) begin
                     // 1c,1d,1e,1f
                     // 9e,9f,be,bf have swapped (Y-indexed) addressing
                     control.index_xy = 1;
