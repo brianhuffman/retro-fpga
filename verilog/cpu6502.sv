@@ -67,13 +67,15 @@ module cpu6502
 
     uwire logic opcode_indirect_x   = reg_opcode ==? 8'b???_000_?1; // ($00,X)
     uwire logic opcode_zeropage     = reg_opcode ==? 8'b???_001_??; // $00
-    uwire logic opcode_immediate    = reg_opcode ==? 8'b???_010_?1; // #$00
+    uwire logic opcode_immediate_a  = reg_opcode ==? 8'b???_010_?1; // #$00
     uwire logic opcode_absolute     = reg_opcode ==? 8'b???_011_??; // $0000
     uwire logic opcode_indirect_y   = reg_opcode ==? 8'b???_100_?1; // ($00),Y
     uwire logic opcode_zeropage_x   = reg_opcode ==? 8'b???_101_??; // $00,X
     uwire logic opcode_absolute_y   = reg_opcode ==? 8'b???_110_?1; // $0000,Y
     uwire logic opcode_absolute_x   = reg_opcode ==? 8'b???_111_??; // $0000,X
 
+    uwire logic opcode_stack        = reg_opcode ==? 8'b0??_0?0_00; // BRK/JSR/RTI/RTS/PHP/PLP/PHA/PLA
+    uwire logic opcode_immediate_xy = reg_opcode ==? 8'b1??_000_?0; // LDX/LDY/CPX/CPY #$00
     uwire logic opcode_acc          = reg_opcode ==? 8'b0??_010_10; // ASL/ROL/LSR/ROR accumulator
     uwire logic opcode_shift        = reg_opcode ==? 8'b0??_???_1?; // ASL/ROL/LSR/ROR (unless implied/immediate)
     uwire logic opcode_dec_inc      = reg_opcode ==? 8'b11?_???_1?; // INC/DEC/isb/dcp (unless implied/immediate)
@@ -106,6 +108,8 @@ module cpu6502
 
     uwire logic opcode_3_byte       = opcode_absolute_any | opcode_absolute_y;
     uwire logic opcode_modify       = opcode_rmw & !opcode_load_store;
+    uwire logic opcode_imm_any      = opcode_immediate_a | opcode_immediate_xy;
+    uwire logic opcode_2_cycle      = opcode_imm_any | (opcode_1_byte & ~opcode_stack);
 
     // Conditional branches (opcode xxx_100_00)
     // 000 = BPL, 001 = BMI
@@ -352,23 +356,11 @@ module cpu6502
             // Opcode available on data_in and reg_opcode
             control.pc_increment = !opcode_1_byte;
 
-            casez (data_in)
-                8'b???_?01_??: next_state.zeropage1 = 1; // $00 or $00,X
-                8'b???_?11_??: next_state.byte3 = 1;     // $0000 or $0000,X
-                8'b???_?00_?1: next_state.zeropage1 = 1; // ($00,X) or ($00),Y
-                8'b???_110_?1: next_state.byte3 = 1;     // $0000,Y
-                8'b???_010_?1: next_state.byte1 = 1;     // immediate
-                8'b???_?10_?0: next_state.byte1 = 1;     // implied or push/pull
-                8'b???_100_00:                           // relative
-                    begin
-                        next_state.branch1 = branch_taken;
-                        next_state.byte1 = ~branch_taken;
-                    end
-                8'b1??_000_?0: next_state.byte1 = 1;     // immediate
-                8'b0??_000_00: next_state.stack1 = 1;    // BRK/JSR/RTI/RTS
-                8'b???_100_10: begin end                 // stuck
-                8'b0??_000_10: begin end                 // stuck
-            endcase
+            next_state.zeropage1 = opcode_zeropage_any | opcode_indirect_any;
+            next_state.byte3 = opcode_3_byte;
+            next_state.byte1 = opcode_2_cycle | (opcode_relative & ~branch_taken);
+            next_state.branch1 = opcode_relative & branch_taken;
+            next_state.stack1 = opcode_stack;
         end
 
         if (reg_state.zeropage1)
