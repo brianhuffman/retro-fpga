@@ -32,11 +32,13 @@ module cpu6502
         logic fixpage;     // Read from 16-bit address with fixed-up page
         logic modify1;     // First write cycle of RMW instruction
         logic modify2;     // Second write cycle of RMW instruction
-        logic branch1;
-        logic branch2;
-        logic stack1;
-        logic stack2;
-        logic stack3;
+        logic branch1;     // Update PCL to PCL+offset for taken branch
+        logic branch2;     // Update PCH for taken branch to adjacent page
+        logic stack1;      // 3rd cycle of BRK/JSR/RTI/RTS/PHP/PLP/PHA/PLA
+        logic stack2;      // 4th cycle of BRK/JSR/RTI/RTS/PLP/PLA
+        logic stack3;      // 5th cycle of BRK/JSR/RTI/RTS
+        logic stack4;      // 6th cycle of BRK/JSR/RTI/RTS
+        logic stack5;      // 7th cycle of BRK
     } state;
 
     // Registers
@@ -89,7 +91,14 @@ module cpu6502
     uwire logic opcode_bit          = reg_opcode ==? 8'b001_0?1_00; // BIT $00 or BIT $0000
     uwire logic opcode_tax_tay      = reg_opcode ==? 8'b101_010_?0; // TAX/TAY
 
+    uwire logic opcode_php_pha      = reg_opcode ==? 8'b0?0_010_00; // PHP/PHA
+    uwire logic opcode_plp_pla      = reg_opcode ==? 8'b0?1_010_00; // PLP/PLA
+    uwire logic opcode_brk_jsr      = reg_opcode ==? 8'b00?_000_00; // BRK/JSR
+    uwire logic opcode_rti_rts      = reg_opcode ==? 8'b01?_000_00; // RTI/RTS
+    uwire logic opcode_brk          = reg_opcode == 8'h00;
+    uwire logic opcode_jsr          = reg_opcode == 8'h20;
     uwire logic opcode_rti          = reg_opcode == 8'h40;
+    uwire logic opcode_rts          = reg_opcode == 8'h60;
     uwire logic opcode_plp          = reg_opcode == 8'h28;
     uwire logic opcode_tax          = reg_opcode == 8'hAA;
     uwire logic opcode_tay          = reg_opcode == 8'hA8;
@@ -189,24 +198,6 @@ module cpu6502
             2'b10: store_out = reg_x;
             2'b11: store_out = reg_a & reg_x;
         endcase // case (reg_opcode[1:0])
-    end
-
-    // Stack pointer
-    var logic [7:0] next_s;
-    always_comb begin
-        var logic [7:0] inc_s = reg_s + 1'b1;
-        var logic [7:0] dec_s = reg_s - 1'b1;
-        // default to previous value
-        next_s = reg_s;
-        // When is S updated?
-        // TXS (implied)
-        // PHA/PHP
-        // PLA/PLP
-        // BRK
-        // JSR
-        // RTI
-        // RTS
-        // TODO: implement all these!
     end
 
     // New values for Registers and Flags
@@ -333,6 +324,8 @@ module cpu6502
         logic write_store;   // write data from store instruction
         logic index_xy;      // index with x or y register
         logic index_y;       // index with y register
+        logic stack_inc;     // increment stack pointer
+        logic stack_dec;     // decrement stack pointer
     } control;
 
     // State machine
@@ -354,7 +347,7 @@ module cpu6502
         begin
             // Requesting byte after opcode byte
             // Opcode available on data_in and reg_opcode
-            control.pc_increment = !opcode_1_byte;
+            control.pc_increment = ~opcode_1_byte;
 
             next_state.zeropage1 = opcode_zeropage_any | opcode_indirect_any;
             next_state.byte3 = opcode_3_byte;
@@ -584,17 +577,69 @@ module cpu6502
 
         if (reg_state.stack1)
         begin
-            // BRK JSR RTI RTS
-            // maybe we should have PHP PLP PHA PLA in this state too
-            next_state.stack2 = 1;
+            // 00 BRK  20 JSR  40 RTI  60 RTS
+            // 08 PHP  28 PLP  48 PHA  68 PLA
+            next_state.byte1 = opcode_php_pha;
+            next_state.stack2 = ~opcode_php_pha;
+            control.addr_stack = 1;
+            control.stack_inc = opcode_rti_rts | opcode_plp_pla;
+            control.stack_dec = opcode_brk | opcode_php_pha;
+            control.write_enable = opcode_brk | opcode_php_pha;
+            // All stack reads in this cycle are ignored
+            // TODO: specify what value to write
+            // brk writes pch
+            // php writes p
+            // pha writes a
         end
 
         if (reg_state.stack2)
         begin
+            // 00 BRK  20 JSR  40 RTI  60 RTS
+            //         28 PLP          68 PLA
+            next_state.byte1 = opcode_plp_pla;
+            next_state.stack3 = ~opcode_plp_pla;
+            control.addr_stack = 1;
+            control.stack_inc = opcode_rti_rts | opcode_plp_pla;
+            control.stack_dec = opcode_brk_jsr;
+            // TODO: specify what values are read
+            // rti/plp read p
+            // rts reads pcl
+            // pla reads a
+            // TODO: specify what values are written
+            // brk writes pcl
+            // jsr writes pch
         end
 
         if (reg_state.stack3)
         begin
+            // 00 BRK  20 JSR  40 RTI  60 RTS
+            next_state.stack4 = 1;
+            control.addr_stack = 1;
+            control.stack_inc = opcode_rti;
+            control.stack_dec = opcode_brk_jsr;
+            control.pc_vector = opcode_rts;
+            control.write_enable = opcode_brk_jsr;
+            // TODO: specify what values are written
+            // brk writes p
+            // jsr writes pcl
+        end
+
+        if (reg_state.stack4)
+        begin
+            // 00 BRK  20 JSR  40 RTI  60 RTS
+            next_state.byte1 = opcode_rti_rts | opcode_jsr;
+            next_state.stack5 = opcode_brk;
+            control.addr_stack = opcode_rti_rts | opcode_jsr;
+            control.addr_fffe = opcode_brk;
+            control.pc_vector = opcode_rti;
+        end
+
+        if (reg_state.stack5)
+        begin
+            // 00 BRK
+            next_state.byte1 = 1;
+            control.addr_inc = 1;
+            control.pc_vector = 1;
         end
 
         if (opcode_store
@@ -615,6 +660,12 @@ module cpu6502
         control.pc_branch2 ? {reg_pc[15:8] + branch_carry, reg_pc[7:0]} :
         control.pc_vector  ? {io_data_in, reg_data_in} :
         pc_inc;
+
+    // Stack register
+    uwire logic [7:0] next_s =
+        control.stack_inc ? reg_s + 1'b1 :
+        control.stack_dec ? reg_s - 1'b1 :
+        reg_s;
 
     // Indexing calculations
     uwire logic [7:0] index = control.index_y ? reg_y : reg_x;
