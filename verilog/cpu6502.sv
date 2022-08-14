@@ -672,7 +672,7 @@ module cpu6502
     uwire logic [7:0] offset = control.index_xy ? index : 8'h00;
     // 9-bit value includes carry bit
     uwire logic [8:0] next_index = data_in + offset;
-    uwire logic [7:0] next_fixpage = data_in + reg_index[8];
+    uwire logic [7:0] next_fixpage = data_in + 8'(reg_index[8]);
 
     // Bus address
     uwire logic [15:0] address_out =
