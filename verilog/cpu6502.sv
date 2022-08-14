@@ -202,7 +202,7 @@ module cpu6502
 
     // New values for Registers and Flags
     var logic [7:0] next_a, next_x, next_y;
-    var logic next_n, next_v, next_d, next_i, next_z, next_c;
+    var logic next_v, next_d, next_i, next_c;
     always_comb begin
         // When is entire P register updated?
         var logic load_p
@@ -212,26 +212,18 @@ module cpu6502
         next_a = reg_a;
         next_x = reg_x;
         next_y = reg_y;
-        next_n = flag_n;
         next_v = flag_v;
         next_d = flag_d;
         next_i = flag_i;
-        next_z = flag_z;
         next_c = flag_c;
         if (reg_state.byte1) begin
             // Load instructions
             if (opcode_lda) next_a = data_in;
             if (opcode_ldx) next_x = data_in;
             if (opcode_ldy) next_y = data_in;
-            if (opcode_load) begin
-                next_n = data_in[7];
-                next_z = data_in == 8'h00;
-            end
 
             if (opcode_bit) begin
-                next_n = data_in[7];
                 next_v = data_in[6];
-                next_z = (reg_a & data_in) == 8'h00;
             end
             if (opcode_alu & !opcode_load_store) begin
                 next_a = alu_out;
@@ -244,8 +236,6 @@ module cpu6502
         end
 
         if (reg_state.modify2) begin
-            next_n = rmw_n_out;
-            next_z = rmw_z_out;
             if (opcode_shift) next_c = rmw_c_out;
         end
 
@@ -274,31 +264,15 @@ module cpu6502
             if (opcode_dey) next_y = dec_y;
             if (opcode_iny) next_y = inc_y;
 
-            if (opcode_txa | opcode_tya) begin
-                next_n = next_a[7];
-                next_z = next_a == 8'h00;
-            end
-            if (opcode_tax | opcode_tsx | opcode_dex | opcode_inx) begin
-                next_n = next_x[7];
-                next_z = next_x == 8'h00;
-            end
-            if (opcode_tay | opcode_dey | opcode_iny) begin
-                next_n = next_y[7];
-                next_z = next_y == 8'h00;
-            end
             if (opcode_acc) begin
                 next_a = shift_out;
-                next_n = shift_n_out;
-                next_z = shift_z_out;
                 next_c = shift_c_out;
             end
         end
         if (load_p) begin
-            next_n = data_in[7];
             next_v = data_in[6];
             next_d = data_in[3];
             next_i = data_in[2];
-            next_z = data_in[1];
             next_c = data_in[0];
         end
         // TODO: implement PLA
@@ -326,6 +300,15 @@ module cpu6502
         logic index_y;       // index with y register
         logic stack_inc;     // increment stack pointer
         logic stack_dec;     // decrement stack pointer
+        logic db_data_in;    // set DB from data_in
+        logic db_rmw;        // set DB from RMW unit
+        logic db_alu;        // set DB from ALU unit
+        logic db_shift;      // set DB from accumulator RMW unit
+        logic db_next_a;     // set DB from A register
+        logic db_next_x;     // set DB from X register
+        logic db_next_y;     // set DB from Y register
+        logic n_db7;         // set N flag from bit 7 of DB
+        logic z_dbz;         // set Z flag from DB == 0
     } control;
 
     // State machine
@@ -341,6 +324,38 @@ module cpu6502
             // Requesting opcode byte
             next_state.byte2 = 1;
             control.pc_increment = 1;
+
+            // Set flags and registers based on previous instruction
+            if (opcode_load) begin
+                control.db_data_in = 1;
+                control.n_db7 = 1;
+                control.z_dbz = 1;
+            end
+            if (opcode_bit) begin
+                control.db_alu = 1;
+                control.n_db7 = 1; //FIXME next_n = data_in[7], not alu output;
+                control.z_dbz = 1;
+            end
+            if (opcode_txa | opcode_tya) begin
+                control.db_next_a = 1;
+                control.n_db7 = 1;
+                control.z_dbz = 1;
+            end
+            if (opcode_tax | opcode_tsx | opcode_dex | opcode_inx) begin
+                control.db_next_x = 1;
+                control.n_db7 = 1;
+                control.z_dbz = 1;
+            end
+            if (opcode_tay | opcode_dey | opcode_iny) begin
+                control.db_next_y = 1;
+                control.n_db7 = 1;
+                control.z_dbz = 1;
+            end
+            if (opcode_acc) begin
+                control.db_shift = 1;
+                control.n_db7 = 1;
+                control.z_dbz = 1;
+            end
         end
 
         if (reg_state.byte2)
@@ -553,6 +568,10 @@ module cpu6502
             control.addr_hold = 1;
             control.write_enable = 1;
             control.write_rmw = 1;
+
+            control.db_rmw = 1;
+            control.n_db7 = 1;
+            control.z_dbz = 1;
         end
 
         if (reg_state.branch1)
@@ -651,6 +670,27 @@ module cpu6502
             control.write_store = 1;
         end
     end
+
+    // Internal Data Bus
+    uwire logic [7:0] db =
+        control.db_data_in ? data_in :
+        control.db_rmw     ? rmw_out :
+        control.db_alu     ? alu_out :
+        control.db_shift   ? shift_out :
+        control.db_next_a  ? next_a :
+        control.db_next_x  ? next_x :
+        control.db_next_y  ? next_y :
+        0'h00;
+
+    // N Flag
+    uwire logic next_n =
+        control.n_db7 ? db[7] :
+        flag_n;
+
+    // Z Flag
+    uwire logic next_z =
+        control.z_dbz ? (db == 8'h00) :
+        flag_z;
 
     // Program counter
     uwire logic [15:0] pc_inc = reg_pc + 16'(control.pc_increment);
