@@ -328,8 +328,6 @@ module cpu6502
             // Set flags and registers based on previous instruction
             if (opcode_load) begin
                 control.db_data_in = 1;
-                control.n_db7 = 1;
-                control.z_dbz = 1;
             end
             if (opcode_bit) begin
                 control.db_alu = 1;
@@ -338,21 +336,22 @@ module cpu6502
             end
             if (opcode_txa | opcode_tya) begin
                 control.db_next_a = 1;
-                control.n_db7 = 1;
-                control.z_dbz = 1;
             end
             if (opcode_tax | opcode_tsx | opcode_dex | opcode_inx) begin
                 control.db_next_x = 1;
-                control.n_db7 = 1;
-                control.z_dbz = 1;
             end
             if (opcode_tay | opcode_dey | opcode_iny) begin
                 control.db_next_y = 1;
-                control.n_db7 = 1;
-                control.z_dbz = 1;
             end
             if (opcode_acc) begin
                 control.db_shift = 1;
+            end
+
+            if (opcode_txa | opcode_tax | opcode_inx | opcode_dex |
+                opcode_tya | opcode_tay | opcode_iny | opcode_dey |
+                opcode_load | opcode_acc | opcode_tsx
+                )
+            begin
                 control.n_db7 = 1;
                 control.z_dbz = 1;
             end
