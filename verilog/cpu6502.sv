@@ -617,7 +617,7 @@ module cpu6502
             next_state.byte1 = opcode_plp_pla;
             next_state.stack3 = ~opcode_plp_pla;
             control.addr_stack = 1;
-            control.stack_inc = opcode_rti_rts | opcode_plp_pla;
+            control.stack_inc = opcode_rti_rts;
             control.stack_dec = opcode_brk_jsr;
             // TODO: specify what values are read
             // rti/plp read p
