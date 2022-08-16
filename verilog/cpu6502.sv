@@ -299,7 +299,6 @@ module cpu6502
                 control.db.data_in = 1;
             end
             if (opcode_bit) begin
-                control.db.alu = 1;
                 control.n.di7 = 1;
                 control.v.di6 = 1;
                 control.z.dbz = 1;
@@ -321,7 +320,7 @@ module cpu6502
             control.db.inc_y = opcode_iny;
             control.db.dec_x = opcode_dex;
             control.db.dec_y = opcode_dey;
-            control.db.alu = opcode_arith;
+            control.db.alu = opcode_arith | opcode_bit;
             control.db.shift = opcode_acc;
 
             if (opcode_acc) begin
