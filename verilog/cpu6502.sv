@@ -291,7 +291,7 @@ module cpu6502
             control.pc.increment = 1;
 
             // Set flags and registers based on previous instruction
-            if (opcode_load) begin
+            if (opcode_load & ~opcode_1_byte) begin
                 control.db.data_in = 1;
             end
             if (opcode_bit) begin
