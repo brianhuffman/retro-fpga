@@ -204,10 +204,6 @@ module cpu6502
     // New values for Registers and Flags
     var logic [7:0] next_a, next_x, next_y;
     always_comb begin
-        // When is entire P register updated?
-        var logic load_p
-            = (opcode_plp & reg_state.byte1) |
-              (opcode_rti & reg_state.stack3);
         // default to previous values
         next_a = reg_a;
         next_x = reg_x;
@@ -249,9 +245,6 @@ module cpu6502
                 next_a = shift_out;
             end
         end
-        if (load_p) begin
-        end
-        // TODO: implement PLA
     end
 
     // Control signals
@@ -284,6 +277,7 @@ module cpu6502
         logic db_next_a;     // set DB from A register
         logic db_next_x;     // set DB from X register
         logic db_next_y;     // set DB from Y register
+        logic n_di7;         // set N flag from bit 7 of data_in
         logic n_db7;         // set N flag from bit 7 of DB
         logic v_di6;         // set V flag from bit 6 of data_in
         logic v_ir5;         // set V flag from bit 5 of Instruction Register
@@ -292,6 +286,7 @@ module cpu6502
         logic d_ir5;         // set D flag from bit 5 of Instruction Register
         logic i_di2;         // set I flag from bit 2 of data_in
         logic i_ir5;         // set I flag from bit 5 of Instruction Register
+        logic z_di1;         // set Z flag from bit 1 of data_in
         logic z_dbz;         // set Z flag from DB == 0
         logic c_di0;         // set C flag from bit 0 of data_in
         logic c_ir5;         // set C flag from bit 5 of Instruction Register
@@ -320,7 +315,7 @@ module cpu6502
             end
             if (opcode_bit) begin
                 control.db_alu = 1;
-                control.n_db7 = 1; //FIXME next_n = data_in[7], not alu output;
+                control.n_di7 = 1;
                 control.v_di6 = 1;
                 control.z_dbz = 1;
             end
@@ -353,6 +348,15 @@ module cpu6502
             begin
                 control.n_db7 = 1;
                 control.z_dbz = 1;
+            end
+
+            if (opcode_plp) begin
+                control.n_di7 = 1;
+                control.v_di6 = 1;
+                control.d_di3 = 1;
+                control.i_di2 = 1;
+                control.z_di1 = 1;
+                control.c_di0 = 1;
             end
         end
 
@@ -640,6 +644,12 @@ module cpu6502
             // TODO: specify what values are written
             // brk writes p
             // jsr writes pcl
+            control.n_di7 = opcode_rti;
+            control.v_di6 = opcode_rti;
+            control.d_di3 = opcode_rti;
+            control.i_di2 = opcode_rti;
+            control.z_di1 = opcode_rti;
+            control.c_di0 = opcode_rti;
         end
 
         if (reg_state.stack4)
@@ -683,6 +693,7 @@ module cpu6502
 
     // N Flag
     uwire logic next_n =
+        control.n_di7 ? data_in[7] :
         control.n_db7 ? db[7] :
         flag_n;
 
@@ -707,6 +718,7 @@ module cpu6502
 
     // Z Flag
     uwire logic next_z =
+        control.z_di1 ? data_in[1] :
         control.z_dbz ? (db == 8'h00) :
         flag_z;
 
