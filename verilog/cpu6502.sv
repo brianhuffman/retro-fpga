@@ -638,8 +638,7 @@ module cpu6502
             control.stack.dec = opcode_brk_jsr;
             control.pc.vector = opcode_rts;
             control.write.enable = opcode_brk_jsr;
-            // TODO: specify what values are written
-            // brk writes p
+            control.write.p = opcode_brk;
             control.write.pcl = opcode_jsr;
             control.n.di7 = opcode_rti;
             control.v.di6 = opcode_rti;
