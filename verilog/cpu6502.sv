@@ -756,9 +756,7 @@ module cpu6502
 
     // Stack register
     uwire logic [7:0] next_s =
-        control.stack.inc ? reg_s + 1'b1 :
-        control.stack.dec ? reg_s - 1'b1 :
-        reg_s;
+        reg_s + {8{control.stack.dec}} + 8'(control.stack.inc);
 
     // Indexing calculations
     uwire logic [7:0] index = control.index.y ? reg_y : reg_x;
