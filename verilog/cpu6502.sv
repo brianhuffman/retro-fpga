@@ -100,6 +100,7 @@ module cpu6502
     uwire logic opcode_rti          = reg_opcode == 8'h40;
     uwire logic opcode_rts          = reg_opcode == 8'h60;
     uwire logic opcode_plp          = reg_opcode == 8'h28;
+    uwire logic opcode_pha          = reg_opcode == 8'h48;
     uwire logic opcode_tax          = reg_opcode == 8'hAA;
     uwire logic opcode_tay          = reg_opcode == 8'hA8;
     uwire logic opcode_tsx          = reg_opcode == 8'hBA;
@@ -296,6 +297,7 @@ module cpu6502
         logic write_same;    // copy data_out from data_in
         logic write_rmw;     // write data from rmw unit
         logic write_store;   // write data from store instruction
+        logic write_a;       // write data from accumulator
         logic index_xy;      // index with x or y register
         logic index_y;       // index with y register
         logic stack_inc;     // increment stack pointer
@@ -607,7 +609,7 @@ module cpu6502
             // TODO: specify what value to write
             // brk writes pch
             // php writes p
-            // pha writes a
+            control.write_a = opcode_pha;
         end
 
         if (reg_state.stack2)
@@ -730,6 +732,7 @@ module cpu6502
         control.write_same  ? data_in :
         control.write_rmw   ? rmw_out :
         control.write_store ? store_out :
+        control.write_a     ? reg_a :
         8'h00;
 
     // Register updates
