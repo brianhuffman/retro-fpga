@@ -145,7 +145,7 @@ module cpu6502
 
     // ALU
     uwire logic [7:0] alu_out;
-    uwire logic alu_c_out, alu_v_out, alu_n_out, alu_z_out;
+    uwire logic alu_c_out, alu_v_out;
     // operands come from accumulator and data bus
     cpu6502_alu alu
         ( .a_in(reg_a),
@@ -155,20 +155,16 @@ module cpu6502
           .op(reg_opcode[7:5]),
           .c_out(alu_c_out),
           .v_out(alu_v_out),
-          .n_out(alu_n_out),
-          .z_out(alu_z_out),
           .result(alu_out) );
 
     // Accumulator shift unit
     uwire logic [7:0] shift_out;
-    uwire logic shift_n_out, shift_z_out, shift_c_out;
+    uwire logic shift_c_out;
     cpu6502_shift shift
         ( .data_in(reg_a),
           .c_in(flag_c),
           .op(reg_opcode[7:5]),
           .c_out(shift_c_out),
-          .n_out(shift_n_out),
-          .z_out(shift_z_out),
           .data_out(shift_out) );
 
     // Index register increment/decrement
@@ -180,14 +176,12 @@ module cpu6502
 
     // RMW unit
     uwire logic [7:0] rmw_out;
-    uwire logic rmw_c_out, rmw_z_out, rmw_n_out;
+    uwire logic rmw_c_out;
     cpu6502_shift rmw
         ( .data_in(data_in),
           .c_in(flag_c),
           .op(reg_opcode[7:5]),
           .c_out(rmw_c_out),
-          .n_out(rmw_n_out),
-          .z_out(rmw_z_out),
           .data_out(rmw_out) );
 
     // Value stored by ST* instruction
@@ -837,8 +831,6 @@ module cpu6502_alu
 
       output logic c_out,
       output logic v_out,
-      output logic n_out,
-      output logic z_out,
       output logic [7:0] result
       );
 
@@ -865,9 +857,7 @@ module cpu6502_alu
         endcase // case (op)
     end
 
-    assign n_out = result[7];
     assign v_out = (a_in[7] ^ result[7]) & (addend[7] ^ result[7]);
-    assign z_out = result == 8'h00;
     assign c_out = bin_add[8];
 
 endmodule: cpu6502_alu
@@ -878,8 +868,6 @@ module cpu6502_shift
       input logic [2:0] op, // 0=ASL, 1=ROL, 2=LSR, 3=ROR, 6=DEC, 7=INC
 
       output logic c_out,
-      output logic n_out,
-      output logic z_out,
       output logic [7:0] data_out
       );
 
@@ -899,8 +887,4 @@ module cpu6502_shift
                 {c_out, data_out} = {data_in, carry};
         end
     end
-
-    assign n_out = data_out[7];
-    assign z_out = data_out == 8'h0;
-
 endmodule: cpu6502_shift
