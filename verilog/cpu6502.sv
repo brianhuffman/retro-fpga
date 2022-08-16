@@ -268,9 +268,14 @@ module cpu6502
         logic db_rmw;        // set DB from RMW unit
         logic db_alu;        // set DB from ALU unit
         logic db_shift;      // set DB from accumulator RMW unit
-        logic db_next_a;     // set DB from A register
-        logic db_next_x;     // set DB from X register
-        logic db_next_y;     // set DB from Y register
+        logic db_a;          // set DB from A register
+        logic db_x;          // set DB from X register
+        logic db_y;          // set DB from Y register
+        logic db_s;          // set DB from S register
+        logic db_inc_x;      // set DB from X register + 1
+        logic db_inc_y;      // set DB from Y register + 1
+        logic db_dec_x;      // set DB from X register - 1
+        logic db_dec_y;      // set DB from Y register - 1
         logic n_di7;         // set N flag from bit 7 of data_in
         logic n_db7;         // set N flag from bit 7 of DB
         logic v_di6;         // set V flag from bit 6 of data_in
@@ -321,15 +326,16 @@ module cpu6502
             if (opcode_cld_sed) control.d_ir5 = 1;
             if (opcode_cli_sei) control.i_ir5 = 1;
             if (opcode_clc_sec) control.c_ir5 = 1;
-            if (opcode_txa | opcode_tya) begin
-                control.db_next_a = 1;
-            end
-            if (opcode_tax | opcode_tsx | opcode_dex | opcode_inx) begin
-                control.db_next_x = 1;
-            end
-            if (opcode_tay | opcode_dey | opcode_iny) begin
-                control.db_next_y = 1;
-            end
+
+            control.db_a = opcode_tax_tay;
+            control.db_x = opcode_txa;
+            control.db_y = opcode_tya;
+            control.db_s = opcode_tsx;
+            control.db_inc_x = opcode_inx;
+            control.db_inc_y = opcode_iny;
+            control.db_dec_x = opcode_dex;
+            control.db_dec_y = opcode_dey;
+
             if (opcode_acc) begin
                 control.db_shift = 1;
                 control.c_shift = 1;
@@ -680,9 +686,13 @@ module cpu6502
         control.db_rmw     ? rmw_out :
         control.db_alu     ? alu_out :
         control.db_shift   ? shift_out :
-        control.db_next_a  ? next_a :
-        control.db_next_x  ? next_x :
-        control.db_next_y  ? next_y :
+        control.db_a       ? reg_a :
+        control.db_x       ? reg_x :
+        control.db_y       ? reg_y :
+        control.db_inc_x   ? inc_x :
+        control.db_inc_y   ? inc_y :
+        control.db_dec_x   ? dec_x :
+        control.db_dec_y   ? dec_y :
         0'h00;
 
     // N Flag
