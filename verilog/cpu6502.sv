@@ -197,58 +197,82 @@ module cpu6502
 
     // Control signals
     var struct packed {
-        logic pc_increment;  // increment pc by 1
-        logic pc_branch1;    // set pcl to result of branch index calculation
-        logic pc_branch2;    // set pch to fixup branch page carry
-        logic pc_vector;     // set pc from last two bytes read
-        logic addr_stack;    // ADH = 01, ADL = S
-        logic addr_zp1;      // ADH = 00, ADL = data_in
-        logic addr_zp2;      // ADH = 00, ADL = indexed
-        logic addr_abs;      // ADH = data_in, ADL = indexed
-        logic addr_fffe;     // address = $fffe
-        logic addr_hold;     // keep address unchanged
-        logic addr_inc;      // ADH unchanged, increment ADL
-        logic addr_carry;    // ADH += indexing carry, ADL unchanged
-        logic write_enable;  // 0 = read, 1 = write
-        logic write_same;    // copy data_out from data_in
-        logic write_rmw;     // write data from rmw unit
-        logic write_store;   // write data from store instruction
-        logic write_a;       // write data from accumulator
-        logic index_xy;      // index with x or y register
-        logic index_y;       // index with y register
-        logic stack_inc;     // increment stack pointer
-        logic stack_dec;     // decrement stack pointer
-        logic db_data_in;    // set DB from data_in
-        logic db_rmw;        // set DB from RMW unit
-        logic db_alu;        // set DB from ALU unit
-        logic db_shift;      // set DB from accumulator RMW unit
-        logic db_a;          // set DB from A register
-        logic db_x;          // set DB from X register
-        logic db_y;          // set DB from Y register
-        logic db_s;          // set DB from S register
-        logic db_inc_x;      // set DB from X register + 1
-        logic db_inc_y;      // set DB from Y register + 1
-        logic db_dec_x;      // set DB from X register - 1
-        logic db_dec_y;      // set DB from Y register - 1
-        logic a_db;          // set A register from DB
-        logic x_db;          // set X register from DB
-        logic y_db;          // set Y register from DB
-        logic n_di7;         // set N flag from bit 7 of data_in
-        logic n_db7;         // set N flag from bit 7 of DB
-        logic v_di6;         // set V flag from bit 6 of data_in
-        logic v_ir5;         // set V flag from bit 5 of Instruction Register
-        logic v_alu;         // set V flag from ALU unit
-        logic d_di3;         // set D flag from bit 3 of data_in
-        logic d_ir5;         // set D flag from bit 5 of Instruction Register
-        logic i_di2;         // set I flag from bit 2 of data_in
-        logic i_ir5;         // set I flag from bit 5 of Instruction Register
-        logic z_di1;         // set Z flag from bit 1 of data_in
-        logic z_dbz;         // set Z flag from DB == 0
-        logic c_di0;         // set C flag from bit 0 of data_in
-        logic c_ir5;         // set C flag from bit 5 of Instruction Register
-        logic c_alu;         // set C flag from ALU carry out
-        logic c_rmw;         // set C flag from RMW carry out
-        logic c_shift;       // set C flag from accumulator RMW carry out
+        struct packed {
+            logic increment; // increment pc by 1
+            logic branch1;   // set pcl to result of branch index calculation
+            logic branch2;   // set pch to fixup branch page carry
+            logic vector;    // set pc from last two bytes read
+        } pc;
+        struct packed {
+            logic stack;     // ADH = 01, ADL = S
+            logic zp1;       // ADH = 00, ADL = data_in
+            logic zp2;       // ADH = 00, ADL = indexed
+            logic abs;       // ADH = data_in, ADL = indexed
+            logic fffe;      // address = $fffe
+            logic hold;      // keep address unchanged
+            logic inc;       // ADH unchanged, increment ADL
+            logic carry;     // ADH += indexing carry, ADL unchanged
+        } addr;
+        struct packed {
+            logic enable;    // 0 = read, 1 = write
+            logic same;      // copy data_out from data_in
+            logic rmw;       // write data from rmw unit
+            logic store;     // write data from store instruction
+            logic a;         // write data from accumulator
+        } write;
+        struct packed {
+            logic xy;        // index with x or y register
+            logic y;         // index with y register
+        } index;
+        struct packed {
+            logic inc;       // increment stack pointer
+            logic dec;       // decrement stack pointer
+        } stack;
+        struct packed {
+            logic data_in;   // set DB from data_in
+            logic rmw;       // set DB from RMW unit
+            logic alu;       // set DB from ALU unit
+            logic shift;     // set DB from accumulator RMW unit
+            logic a;         // set DB from A register
+            logic x;         // set DB from X register
+            logic y;         // set DB from Y register
+            logic s;         // set DB from S register
+            logic inc_x;     // set DB from X register + 1
+            logic inc_y;     // set DB from Y register + 1
+            logic dec_x;     // set DB from X register - 1
+            logic dec_y;     // set DB from Y register - 1
+        } db;
+        struct packed {
+            logic di7;       // set N flag from bit 7 of data_in
+            logic db7;       // set N flag from bit 7 of DB
+        } n;
+        struct packed {
+            logic di6;       // set V flag from bit 6 of data_in
+            logic ir5;       // set V flag from bit 5 of Instruction Register
+            logic alu;       // set V flag from ALU unit
+        } v;
+        struct packed {
+            logic di3;       // set D flag from bit 3 of data_in
+            logic ir5;       // set D flag from bit 5 of Instruction Register
+        } d;
+        struct packed {
+            logic di2;       // set I flag from bit 2 of data_in
+            logic ir5;       // set I flag from bit 5 of Instruction Register
+        } i;
+        struct packed {
+            logic di1;       // set Z flag from bit 1 of data_in
+            logic dbz;       // set Z flag from DB == 0
+        } z;
+        struct packed {
+            logic di0;       // set C flag from bit 0 of data_in
+            logic ir5;       // set C flag from bit 5 of Instruction Register
+            logic alu;       // set C flag from ALU carry out
+            logic rmw;       // set C flag from RMW carry out
+            logic shift;     // set C flag from accumulator RMW carry out
+        } c;
+        logic a;             // set A register from DB
+        logic x;             // set X register from DB
+        logic y;             // set Y register from DB
     } control;
 
     // State machine
@@ -263,41 +287,41 @@ module cpu6502
         begin
             // Requesting opcode byte
             next_state.byte2 = 1;
-            control.pc_increment = 1;
+            control.pc.increment = 1;
 
             // Set flags and registers based on previous instruction
             if (opcode_load) begin
-                control.db_data_in = 1;
+                control.db.data_in = 1;
             end
             if (opcode_bit) begin
-                control.db_alu = 1;
-                control.n_di7 = 1;
-                control.v_di6 = 1;
-                control.z_dbz = 1;
+                control.db.alu = 1;
+                control.n.di7 = 1;
+                control.v.di6 = 1;
+                control.z.dbz = 1;
             end
             if (opcode_adc_sbc) begin
-                control.v_alu = 1;
-                control.c_alu = 1;
+                control.v.alu = 1;
+                control.c.alu = 1;
             end
-            if (opcode_clv)     control.v_ir5 = 1;
-            if (opcode_cld_sed) control.d_ir5 = 1;
-            if (opcode_cli_sei) control.i_ir5 = 1;
-            if (opcode_clc_sec) control.c_ir5 = 1;
+            if (opcode_clv)     control.v.ir5 = 1;
+            if (opcode_cld_sed) control.d.ir5 = 1;
+            if (opcode_cli_sei) control.i.ir5 = 1;
+            if (opcode_clc_sec) control.c.ir5 = 1;
 
-            control.db_a = opcode_tax_tay;
-            control.db_x = opcode_txa;
-            control.db_y = opcode_tya;
-            control.db_s = opcode_tsx;
-            control.db_inc_x = opcode_inx;
-            control.db_inc_y = opcode_iny;
-            control.db_dec_x = opcode_dex;
-            control.db_dec_y = opcode_dey;
-            control.db_alu = opcode_alu & !opcode_load_store;
-            control.db_shift = opcode_acc;
+            control.db.a = opcode_tax_tay;
+            control.db.x = opcode_txa;
+            control.db.y = opcode_tya;
+            control.db.s = opcode_tsx;
+            control.db.inc_x = opcode_inx;
+            control.db.inc_y = opcode_iny;
+            control.db.dec_x = opcode_dex;
+            control.db.dec_y = opcode_dey;
+            control.db.alu = opcode_alu & !opcode_load_store;
+            control.db.shift = opcode_acc;
 
             if (opcode_acc) begin
-                control.db_shift = 1;
-                control.c_shift = 1;
+                control.db.shift = 1;
+                control.c.shift = 1;
             end
 
             if (opcode_txa | opcode_tax | opcode_inx | opcode_dex |
@@ -306,27 +330,27 @@ module cpu6502
                 (opcode_alu & !opcode_load_store)
                 )
             begin
-                control.n_db7 = 1;
-                control.z_dbz = 1;
+                control.n.db7 = 1;
+                control.z.dbz = 1;
             end
 
             if (opcode_plp) begin
-                control.n_di7 = 1;
-                control.v_di6 = 1;
-                control.d_di3 = 1;
-                control.i_di2 = 1;
-                control.z_di1 = 1;
-                control.c_di0 = 1;
+                control.n.di7 = 1;
+                control.v.di6 = 1;
+                control.d.di3 = 1;
+                control.i.di2 = 1;
+                control.z.di1 = 1;
+                control.c.di0 = 1;
             end
 
-            control.a_db =
+            control.a =
                 opcode_lda | opcode_txa | opcode_tya | opcode_acc |
                 (opcode_alu & !opcode_load_store);
 
-            control.x_db =
+            control.x =
                 opcode_ldx | opcode_tax | opcode_tsx | opcode_inx | opcode_dex;
 
-            control.y_db =
+            control.y =
                 opcode_ldy | opcode_tay | opcode_dey | opcode_iny;
 
             // TODO: CPX/CPY
@@ -336,7 +360,7 @@ module cpu6502
         begin
             // Requesting byte after opcode byte
             // Opcode available on data_in and reg_opcode
-            control.pc_increment = ~opcode_1_byte;
+            control.pc.increment = ~opcode_1_byte;
 
             next_state.zeropage1 = opcode_zeropage_any | opcode_indirect_any;
             next_state.byte3 = opcode_3_byte;
@@ -364,13 +388,13 @@ module cpu6502
             // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
             // 17  slo rla sre rra sax lax dcp isb  $00,X
 
-            control.addr_zp1 = 1;
+            control.addr.zp1 = 1;
 
             if (opcode_indirect_x)
             begin
                 // 8'b???_000_?1
                 // 01,03
-                control.index_xy = 1;
+                control.index.xy = 1;
                 next_state.zeropage2 = 1;
             end
             if (opcode_zeropage)
@@ -385,8 +409,8 @@ module cpu6502
                 // 8'b???_101_??
                 // 14,15,16,17
                 // 10x_101_1x have swapped (Y-indexed) addressing
-                control.index_xy = 1;
-                control.index_y = opcode_load_store & reg_opcode[1];
+                control.index.xy = 1;
+                control.index.y = opcode_load_store & reg_opcode[1];
                 next_state.zeropage2 = 1;
             end
             if (opcode_indirect_y)
@@ -408,7 +432,7 @@ module cpu6502
             // 15  ORA AND EOR ADC STA LDA CMP SBC  $00,X
             // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
             // 17  slo rla sre rra sax lax dcp isb  $00,X
-            control.addr_zp2 = 1;
+            control.addr.zp2 = 1;
             next_state.indirect = opcode_indirect_x; // xxx_000_x1 (01,03)
             next_state.byte1 = ~opcode_indirect_x;    // xxx_101_xx (14,15,16,17)
         end
@@ -429,10 +453,10 @@ module cpu6502
             // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X  1101
             // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X  1110 (Y for shx/LDX)
             // 1f  slo rla sre rra sha lax dcp isb  $0000,X  1111 (Y for sha/lax)
-            control.pc_increment = 1;
+            control.pc.increment = 1;
             if (opcode_jmp_abs) begin
                 next_state.byte1 = 1;
-                control.pc_vector = 1;
+                control.pc.vector = 1;
             end else begin
                 next_state.absolute = 1;
             end
@@ -441,12 +465,12 @@ module cpu6502
                 if (reg_opcode[2]) begin
                     // 1c,1d,1e,1f
                     // 9e,9f,be,bf have swapped (Y-indexed) addressing
-                    control.index_xy = 1;
-                    control.index_y = opcode_load_store & reg_opcode[1];
+                    control.index.xy = 1;
+                    control.index.y = opcode_load_store & reg_opcode[1];
                 end else begin
                     // 19,1b
-                    control.index_xy = 1;
-                    control.index_y = 1;
+                    control.index.xy = 1;
+                    control.index.y = 1;
                 end
             end
         end
@@ -474,7 +498,7 @@ module cpu6502
             // 1f  slo rla sre rra sha lax dcp isb  $0000,X (rmw)
             // state "fixpage" only if address calculation carried
             // or if the instruction was indexed write or modify
-            control.addr_abs = 1;
+            control.addr.abs = 1;
 
             if (reg_opcode[4]) begin
                 // indexed
@@ -501,12 +525,12 @@ module cpu6502
             // 03  slo rla sre rra sax lax dcp isb  ($00,X)
             // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
             // 13  slo rla sre rra sha lax dcp isb  ($00),Y
-            control.addr_inc = 1;
+            control.addr.inc = 1;
             next_state.absolute = 1;
             if (reg_opcode[4]) begin
                 // ($00),Y (11,13)
-                control.index_xy = 1;
-                control.index_y = 1;
+                control.index.xy = 1;
+                control.index.y = 1;
             end
         end
 
@@ -523,7 +547,7 @@ module cpu6502
             // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X
             // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X
             // 1f  slo rla sre rra sha lax dcp isb  $0000,X
-            control.addr_carry = 1;
+            control.addr.carry = 1;
             if (opcode_modify) next_state.modify1 = 1;
             else next_state.byte1 = 1;
         end
@@ -531,22 +555,22 @@ module cpu6502
         if (reg_state.modify1)
         begin
             next_state.modify2 = 1;
-            control.addr_hold = 1;
-            control.write_enable = 1;
-            control.write_same = 1;
+            control.addr.hold = 1;
+            control.write.enable = 1;
+            control.write.same = 1;
         end
 
         if (reg_state.modify2)
         begin
             next_state.byte1 = 1;
-            control.addr_hold = 1;
-            control.write_enable = 1;
-            control.write_rmw = 1;
+            control.addr.hold = 1;
+            control.write.enable = 1;
+            control.write.rmw = 1;
 
-            control.db_rmw = 1;
-            control.n_db7 = 1;
-            control.z_dbz = 1;
-            control.c_rmw = opcode_shift;
+            control.db.rmw = 1;
+            control.n.db7 = 1;
+            control.z.dbz = 1;
+            control.c.rmw = opcode_shift;
         end
 
         if (reg_state.branch1)
@@ -555,7 +579,7 @@ module cpu6502
             // xxx_100_00 (10)
             // 10  BPL BMI BVC BVS BCC BCS BNE BEQ
             // 12   -   -   -   -   -   -   -   -
-            control.pc_branch1 = 1;
+            control.pc.branch1 = 1;
             if (branch_result[9:8] == 2'b00)
                 next_state.byte1 = 1;
             else
@@ -565,7 +589,7 @@ module cpu6502
         if (reg_state.branch2)
         begin
             // Fixup high byte of PC for branch
-            control.pc_branch2 = 1;
+            control.pc.branch2 = 1;
             next_state.byte1 = 1;
         end
 
@@ -575,15 +599,15 @@ module cpu6502
             // 08 PHP  28 PLP  48 PHA  68 PLA
             next_state.byte1 = opcode_php_pha;
             next_state.stack2 = ~opcode_php_pha;
-            control.addr_stack = 1;
-            control.stack_inc = opcode_rti_rts | opcode_plp_pla;
-            control.stack_dec = opcode_brk | opcode_php_pha;
-            control.write_enable = opcode_brk | opcode_php_pha;
+            control.addr.stack = 1;
+            control.stack.inc = opcode_rti_rts | opcode_plp_pla;
+            control.stack.dec = opcode_brk | opcode_php_pha;
+            control.write.enable = opcode_brk | opcode_php_pha;
             // All stack reads in this cycle are ignored
             // TODO: specify what value to write
             // brk writes pch
             // php writes p
-            control.write_a = opcode_pha;
+            control.write.a = opcode_pha;
         end
 
         if (reg_state.stack2)
@@ -592,9 +616,9 @@ module cpu6502
             //         28 PLP          68 PLA
             next_state.byte1 = opcode_plp_pla;
             next_state.stack3 = ~opcode_plp_pla;
-            control.addr_stack = 1;
-            control.stack_inc = opcode_rti_rts;
-            control.stack_dec = opcode_brk_jsr;
+            control.addr.stack = 1;
+            control.stack.inc = opcode_rti_rts;
+            control.stack.dec = opcode_brk_jsr;
             // TODO: specify what values are read
             // rti/plp read p
             // rts reads pcl
@@ -608,20 +632,20 @@ module cpu6502
         begin
             // 00 BRK  20 JSR  40 RTI  60 RTS
             next_state.stack4 = 1;
-            control.addr_stack = 1;
-            control.stack_inc = opcode_rti;
-            control.stack_dec = opcode_brk_jsr;
-            control.pc_vector = opcode_rts;
-            control.write_enable = opcode_brk_jsr;
+            control.addr.stack = 1;
+            control.stack.inc = opcode_rti;
+            control.stack.dec = opcode_brk_jsr;
+            control.pc.vector = opcode_rts;
+            control.write.enable = opcode_brk_jsr;
             // TODO: specify what values are written
             // brk writes p
             // jsr writes pcl
-            control.n_di7 = opcode_rti;
-            control.v_di6 = opcode_rti;
-            control.d_di3 = opcode_rti;
-            control.i_di2 = opcode_rti;
-            control.z_di1 = opcode_rti;
-            control.c_di0 = opcode_rti;
+            control.n.di7 = opcode_rti;
+            control.v.di6 = opcode_rti;
+            control.d.di3 = opcode_rti;
+            control.i.di2 = opcode_rti;
+            control.z.di1 = opcode_rti;
+            control.c.di0 = opcode_rti;
         end
 
         if (reg_state.stack4)
@@ -629,17 +653,17 @@ module cpu6502
             // 00 BRK  20 JSR  40 RTI  60 RTS
             next_state.byte1 = opcode_rti_rts | opcode_jsr;
             next_state.stack5 = opcode_brk;
-            control.addr_stack = opcode_rti_rts | opcode_jsr;
-            control.addr_fffe = opcode_brk;
-            control.pc_vector = opcode_rti;
+            control.addr.stack = opcode_rti_rts | opcode_jsr;
+            control.addr.fffe = opcode_brk;
+            control.pc.vector = opcode_rti;
         end
 
         if (reg_state.stack5)
         begin
             // 00 BRK
             next_state.byte1 = 1;
-            control.addr_inc = 1;
-            control.pc_vector = 1;
+            control.addr.inc = 1;
+            control.pc.vector = 1;
         end
 
         if (opcode_store
@@ -647,115 +671,115 @@ module cpu6502
            & !(reg_opcode ==? 8'b???_??0_?0)
            & !(reg_opcode ==? 8'b???_010_?1))
         begin
-            control.write_enable = 1;
-            control.write_store = 1;
+            control.write.enable = 1;
+            control.write.store = 1;
         end
     end
 
     // Internal Data Bus
     uwire logic [7:0] db =
-        control.db_data_in ? data_in :
-        control.db_rmw     ? rmw_out :
-        control.db_alu     ? alu_out :
-        control.db_shift   ? shift_out :
-        control.db_a       ? reg_a :
-        control.db_x       ? reg_x :
-        control.db_y       ? reg_y :
-        control.db_inc_x   ? inc_x :
-        control.db_inc_y   ? inc_y :
-        control.db_dec_x   ? dec_x :
-        control.db_dec_y   ? dec_y :
+        control.db.data_in ? data_in :
+        control.db.rmw     ? rmw_out :
+        control.db.alu     ? alu_out :
+        control.db.shift   ? shift_out :
+        control.db.a       ? reg_a :
+        control.db.x       ? reg_x :
+        control.db.y       ? reg_y :
+        control.db.inc_x   ? inc_x :
+        control.db.inc_y   ? inc_y :
+        control.db.dec_x   ? dec_x :
+        control.db.dec_y   ? dec_y :
         0'h00;
 
     // N Flag
     uwire logic next_n =
-        control.n_di7 ? data_in[7] :
-        control.n_db7 ? db[7] :
+        control.n.di7 ? data_in[7] :
+        control.n.db7 ? db[7] :
         flag_n;
 
     // V Flag
     uwire logic next_v =
-        control.v_di6 ? data_in[6] :
-        control.v_ir5 ? reg_opcode[5] :
-        control.v_alu ? alu_v_out :
+        control.v.di6 ? data_in[6] :
+        control.v.ir5 ? reg_opcode[5] :
+        control.v.alu ? alu_v_out :
         flag_v;
 
     // D Flag
     uwire logic next_d =
-        control.d_di3 ? data_in[3] :
-        control.d_ir5 ? reg_opcode[5] :
+        control.d.di3 ? data_in[3] :
+        control.d.ir5 ? reg_opcode[5] :
         flag_d;
 
     // I Flag
     uwire logic next_i =
-        control.i_di2 ? data_in[2] :
-        control.i_ir5 ? reg_opcode[5] :
+        control.i.di2 ? data_in[2] :
+        control.i.ir5 ? reg_opcode[5] :
         flag_i;
 
     // Z Flag
     uwire logic next_z =
-        control.z_di1 ? data_in[1] :
-        control.z_dbz ? (db == 8'h00) :
+        control.z.di1 ? data_in[1] :
+        control.z.dbz ? (db == 8'h00) :
         flag_z;
 
     // C Flag
     uwire logic next_c =
-        control.c_di0 ? data_in[0] :
-        control.c_ir5 ? reg_opcode[5] :
-        control.c_alu ? alu_c_out :
-        control.c_rmw ? rmw_c_out :
-        control.c_shift ? shift_c_out :
+        control.c.di0 ? data_in[0] :
+        control.c.ir5 ? reg_opcode[5] :
+        control.c.alu ? alu_c_out :
+        control.c.rmw ? rmw_c_out :
+        control.c.shift ? shift_c_out :
         flag_c;
 
     // Accumulator register
-    uwire logic [7:0] next_a = control.a_db ? db : reg_a;
+    uwire logic [7:0] next_a = control.a ? db : reg_a;
 
     // X index register
-    uwire logic [7:0] next_x = control.x_db ? db : reg_x;
+    uwire logic [7:0] next_x = control.x ? db : reg_x;
 
     // Y index register
-    uwire logic [7:0] next_y = control.y_db ? db : reg_y;
+    uwire logic [7:0] next_y = control.y ? db : reg_y;
 
     // Program counter
-    uwire logic [15:0] pc_inc = reg_pc + 16'(control.pc_increment);
+    uwire logic [15:0] pc_inc = reg_pc + 16'(control.pc.increment);
     uwire logic [7:0]  branch_carry = {{7{reg_branch[9]}}, reg_branch[8]};
     uwire logic [15:0] next_pc =
-        control.pc_branch1 ? {reg_pc[15:8], branch_result[7:0]} :
-        control.pc_branch2 ? {reg_pc[15:8] + branch_carry, reg_pc[7:0]} :
-        control.pc_vector  ? {io_data_in, reg_data_in} :
+        control.pc.branch1 ? {reg_pc[15:8], branch_result[7:0]} :
+        control.pc.branch2 ? {reg_pc[15:8] + branch_carry, reg_pc[7:0]} :
+        control.pc.vector  ? {io_data_in, reg_data_in} :
         pc_inc;
 
     // Stack register
     uwire logic [7:0] next_s =
-        control.stack_inc ? reg_s + 1'b1 :
-        control.stack_dec ? reg_s - 1'b1 :
+        control.stack.inc ? reg_s + 1'b1 :
+        control.stack.dec ? reg_s - 1'b1 :
         reg_s;
 
     // Indexing calculations
-    uwire logic [7:0] index = control.index_y ? reg_y : reg_x;
-    uwire logic [7:0] offset = control.index_xy ? index : 8'h00;
+    uwire logic [7:0] index = control.index.y ? reg_y : reg_x;
+    uwire logic [7:0] offset = control.index.xy ? index : 8'h00;
     // 9-bit value includes carry bit
     uwire logic [8:0] next_index = data_in + offset;
     uwire logic [7:0] next_fixpage = data_in + 8'(reg_index[8]);
 
     // Bus address
     uwire logic [15:0] address_out =
-        control.addr_stack ? {8'h01, reg_s} :
-        control.addr_zp1   ? {8'h00, data_in} :
-        control.addr_zp2   ? {8'h00, reg_index[7:0]} :
-        control.addr_abs   ? {data_in, reg_index[7:0]} :
-        control.addr_fffe  ? 16'hfffe :
-        control.addr_hold  ? reg_addr :
-        control.addr_inc   ? {reg_addr[15:8], reg_addr[7:0] + 8'h1} :
-        control.addr_carry ? {reg_fixpage, reg_addr[7:0]} :
+        control.addr.stack ? {8'h01, reg_s} :
+        control.addr.zp1   ? {8'h00, data_in} :
+        control.addr.zp2   ? {8'h00, reg_index[7:0]} :
+        control.addr.abs   ? {data_in, reg_index[7:0]} :
+        control.addr.fffe  ? 16'hfffe :
+        control.addr.hold  ? reg_addr :
+        control.addr.inc   ? {reg_addr[15:8], reg_addr[7:0] + 8'h1} :
+        control.addr.carry ? {reg_fixpage, reg_addr[7:0]} :
         reg_pc;
 
     // Data out
     uwire logic [7:0] data_out =
-        control.write_same  ? data_in :
-        control.write_rmw   ? rmw_out :
-        control.write_store ? store_out :
-        control.write_a     ? reg_a :
+        control.write.same  ? data_in :
+        control.write.rmw   ? rmw_out :
+        control.write.store ? store_out :
+        control.write.a     ? reg_a :
         8'h00;
 
     // Register updates
@@ -790,7 +814,7 @@ module cpu6502
 
             // after we've done a write, data_in should reflect the
             // previous data_out.
-            if (control.write_enable) begin
+            if (control.write.enable) begin
                 reg_data_in <= data_out;
             end else begin
                 reg_data_in <= io_data_in;
@@ -801,7 +825,7 @@ module cpu6502
     // Module outputs
     assign io_address      = address_out;
     assign io_data_out     = data_out;
-    assign io_write_enable = control.write_enable;
+    assign io_write_enable = control.write.enable;
     assign io_sync         = reg_state.byte1;
 
     assign io_debug_opcode = reg_opcode;
