@@ -195,52 +195,6 @@ module cpu6502
         endcase // case (reg_opcode[1:0])
     end
 
-    // New values for Registers and Flags
-    var logic [7:0] next_a, next_x, next_y;
-    always_comb begin
-        // default to previous values
-        next_a = reg_a;
-        next_x = reg_x;
-        next_y = reg_y;
-        if (reg_state.byte1) begin
-            // Load instructions
-            if (opcode_lda) next_a = data_in;
-            if (opcode_ldx) next_x = data_in;
-            if (opcode_ldy) next_y = data_in;
-
-            if (opcode_alu & !opcode_load_store) begin
-                next_a = alu_out;
-            end
-            // TODO: CPX/CPY
-        end
-
-        if (reg_state.byte1) begin
-            //     00  20  40  60  80  a0  c0  e0
-            // 08                  DEY TAY INY INX
-            // 18  CLC SEC CLI SEI TYA CLV CLD SED
-            // 0a  ASL ROL LSR ROR TXA TAX DEX NOP
-            // 1a  nop nop nop nop TXS TSX nop nop
-            // 08                  Z-- Z-- Z-- Z--
-            // 18  --- --- --- --- Z-- --- --- ---
-            // 0a  ZC- ZC- ZC- ZC- Z-- Z-- Z-- ---
-            // 1a  --- --- --- --- --- Z-- --- ---
-
-            if (opcode_txa) next_a = reg_x;
-            if (opcode_tya) next_a = reg_y;
-            if (opcode_tax) next_x = reg_a;
-            if (opcode_tsx) next_x = reg_s;
-            if (opcode_dex) next_x = dec_x;
-            if (opcode_inx) next_x = inc_x;
-            if (opcode_tay) next_y = reg_a;
-            if (opcode_dey) next_y = dec_y;
-            if (opcode_iny) next_y = inc_y;
-
-            if (opcode_acc) begin
-                next_a = shift_out;
-            end
-        end
-    end
-
     // Control signals
     var struct packed {
         logic pc_increment;  // increment pc by 1
@@ -276,6 +230,9 @@ module cpu6502
         logic db_inc_y;      // set DB from Y register + 1
         logic db_dec_x;      // set DB from X register - 1
         logic db_dec_y;      // set DB from Y register - 1
+        logic a_db;          // set A register from DB
+        logic x_db;          // set X register from DB
+        logic y_db;          // set Y register from DB
         logic n_di7;         // set N flag from bit 7 of data_in
         logic n_db7;         // set N flag from bit 7 of DB
         logic v_di6;         // set V flag from bit 6 of data_in
@@ -335,6 +292,8 @@ module cpu6502
             control.db_inc_y = opcode_iny;
             control.db_dec_x = opcode_dex;
             control.db_dec_y = opcode_dey;
+            control.db_alu = opcode_alu & !opcode_load_store;
+            control.db_shift = opcode_acc;
 
             if (opcode_acc) begin
                 control.db_shift = 1;
@@ -343,7 +302,8 @@ module cpu6502
 
             if (opcode_txa | opcode_tax | opcode_inx | opcode_dex |
                 opcode_tya | opcode_tay | opcode_iny | opcode_dey |
-                opcode_load | opcode_acc | opcode_tsx
+                opcode_load | opcode_acc | opcode_tsx |
+                (opcode_alu & !opcode_load_store)
                 )
             begin
                 control.n_db7 = 1;
@@ -358,6 +318,18 @@ module cpu6502
                 control.z_di1 = 1;
                 control.c_di0 = 1;
             end
+
+            control.a_db =
+                opcode_lda | opcode_txa | opcode_tya | opcode_acc |
+                (opcode_alu & !opcode_load_store);
+
+            control.x_db =
+                opcode_ldx | opcode_tax | opcode_tsx | opcode_inx | opcode_dex;
+
+            control.y_db =
+                opcode_ldy | opcode_tay | opcode_dey | opcode_iny;
+
+            // TODO: CPX/CPY
         end
 
         if (reg_state.byte2)
@@ -734,6 +706,15 @@ module cpu6502
         control.c_rmw ? rmw_c_out :
         control.c_shift ? shift_c_out :
         flag_c;
+
+    // Accumulator register
+    uwire logic [7:0] next_a = control.a_db ? db : reg_a;
+
+    // X index register
+    uwire logic [7:0] next_x = control.x_db ? db : reg_x;
+
+    // Y index register
+    uwire logic [7:0] next_y = control.y_db ? db : reg_y;
 
     // Program counter
     uwire logic [15:0] pc_inc = reg_pc + 16'(control.pc_increment);
