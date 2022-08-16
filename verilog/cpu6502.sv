@@ -117,7 +117,8 @@ module cpu6502
     uwire logic opcode_clc_sec      = reg_opcode ==? 8'b00?_110_00; // CLC/SEC
 
     uwire logic opcode_3_byte       = opcode_absolute_any | opcode_absolute_y;
-    uwire logic opcode_modify       = opcode_rmw & !opcode_load_store;
+    uwire logic opcode_arith        = opcode_alu & ~opcode_load_store;
+    uwire logic opcode_modify       = opcode_rmw & ~opcode_load_store;
     uwire logic opcode_imm_any      = opcode_immediate_a | opcode_immediate_xy;
     uwire logic opcode_2_cycle      = opcode_imm_any | (opcode_1_byte & ~opcode_stack);
 
@@ -316,7 +317,7 @@ module cpu6502
             control.db.inc_y = opcode_iny;
             control.db.dec_x = opcode_dex;
             control.db.dec_y = opcode_dey;
-            control.db.alu = opcode_alu & !opcode_load_store;
+            control.db.alu = opcode_arith;
             control.db.shift = opcode_acc;
 
             if (opcode_acc) begin
@@ -326,8 +327,7 @@ module cpu6502
 
             if (opcode_txa | opcode_tax | opcode_inx | opcode_dex |
                 opcode_tya | opcode_tay | opcode_iny | opcode_dey |
-                opcode_load | opcode_acc | opcode_tsx |
-                (opcode_alu & !opcode_load_store)
+                opcode_load | opcode_acc | opcode_tsx | opcode_arith
                 )
             begin
                 control.n.db7 = 1;
@@ -344,8 +344,7 @@ module cpu6502
             end
 
             control.a =
-                opcode_lda | opcode_txa | opcode_tya | opcode_acc |
-                (opcode_alu & !opcode_load_store);
+                opcode_lda | opcode_txa | opcode_tya | opcode_acc | opcode_arith;
 
             control.x =
                 opcode_ldx | opcode_tax | opcode_tsx | opcode_inx | opcode_dex;
@@ -401,8 +400,8 @@ module cpu6502
             begin
                 // 8'b???_001_??
                 // 04,05,06,07
-                next_state.modify1 = opcode_rmw;
-                next_state.byte1 = ~opcode_rmw;
+                next_state.modify1 = opcode_modify;
+                next_state.byte1 = ~opcode_modify;
             end
             if (opcode_zeropage_x)
             begin
