@@ -102,6 +102,7 @@ module cpu6502
     uwire logic opcode_php          = reg_opcode == 8'h08;
     uwire logic opcode_plp          = reg_opcode == 8'h28;
     uwire logic opcode_pha          = reg_opcode == 8'h48;
+    uwire logic opcode_pla          = reg_opcode == 8'h68;
     uwire logic opcode_tax          = reg_opcode == 8'hAA;
     uwire logic opcode_tay          = reg_opcode == 8'hA8;
     uwire logic opcode_tsx          = reg_opcode == 8'hBA;
@@ -295,7 +296,7 @@ module cpu6502
             control.pc.increment = 1;
 
             // Set flags and registers based on previous instruction
-            control.db.data_in = opcode_load & ~opcode_1_byte;
+            control.db.data_in = (opcode_load & ~opcode_1_byte) | opcode_pla;
             control.db.a = opcode_tax_tay;
             control.db.x = opcode_txa;
             control.db.y = opcode_tya;
@@ -329,7 +330,7 @@ module cpu6502
 
             if (opcode_txa | opcode_tax | opcode_inx | opcode_dex |
                 opcode_tya | opcode_tay | opcode_iny | opcode_dey |
-                opcode_load | opcode_acc | opcode_tsx | opcode_arith
+                opcode_load | opcode_acc | opcode_tsx | opcode_arith | opcode_pla
                 )
             begin
                 control.n.db7 = 1;
@@ -337,7 +338,7 @@ module cpu6502
             end
 
             control.a =
-                opcode_lda | opcode_txa | opcode_tya | opcode_acc | opcode_arith;
+                opcode_lda | opcode_txa | opcode_tya | opcode_acc | opcode_arith | opcode_pla;
 
             control.x =
                 opcode_ldx | opcode_tax | opcode_tsx | opcode_inx | opcode_dex;
