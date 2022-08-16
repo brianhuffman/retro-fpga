@@ -203,7 +203,7 @@ module cpu6502
 
     // New values for Registers and Flags
     var logic [7:0] next_a, next_x, next_y;
-    var logic next_v, next_d, next_i, next_c;
+    var logic next_d, next_i, next_c;
     always_comb begin
         // When is entire P register updated?
         var logic load_p
@@ -213,7 +213,6 @@ module cpu6502
         next_a = reg_a;
         next_x = reg_x;
         next_y = reg_y;
-        next_v = flag_v;
         next_d = flag_d;
         next_i = flag_i;
         next_c = flag_c;
@@ -223,14 +222,10 @@ module cpu6502
             if (opcode_ldx) next_x = data_in;
             if (opcode_ldy) next_y = data_in;
 
-            if (opcode_bit) begin
-                next_v = data_in[6];
-            end
             if (opcode_alu & !opcode_load_store) begin
                 next_a = alu_out;
             end
             if (opcode_adc_sbc) begin
-                next_v = alu_v_out;
                 next_c = alu_c_out;
             end
             // TODO: CPX/CPY
@@ -251,7 +246,6 @@ module cpu6502
             // 0a  ZC- ZC- ZC- ZC- Z-- Z-- Z-- ---
             // 1a  --- --- --- --- --- Z-- --- ---
 
-            if (opcode_clv)     next_v = 0;
             if (opcode_cld_sed) next_d = reg_opcode[5];
             if (opcode_cli_sei) next_i = reg_opcode[5];
             if (opcode_clc_sec) next_c = reg_opcode[5];
@@ -271,7 +265,6 @@ module cpu6502
             end
         end
         if (load_p) begin
-            next_v = data_in[6];
             next_d = data_in[3];
             next_i = data_in[2];
             next_c = data_in[0];
@@ -310,6 +303,9 @@ module cpu6502
         logic db_next_x;     // set DB from X register
         logic db_next_y;     // set DB from Y register
         logic n_db7;         // set N flag from bit 7 of DB
+        logic v_di6;         // set V flag from bit 6 of data_in
+        logic v_ir5;         // set V flag from bit 5 of Instruction Register
+        logic v_alu;         // set V flag from ALU unit
         logic z_dbz;         // set Z flag from DB == 0
     } control;
 
@@ -334,8 +330,13 @@ module cpu6502
             if (opcode_bit) begin
                 control.db_alu = 1;
                 control.n_db7 = 1; //FIXME next_n = data_in[7], not alu output;
+                control.v_di6 = 1;
                 control.z_dbz = 1;
             end
+            if (opcode_adc_sbc) begin
+                control.v_alu = 1;
+            end
+            if (opcode_clv) control.v_ir5 = 1;
             if (opcode_txa | opcode_tya) begin
                 control.db_next_a = 1;
             end
@@ -687,6 +688,13 @@ module cpu6502
     uwire logic next_n =
         control.n_db7 ? db[7] :
         flag_n;
+
+    // V Flag
+    uwire logic next_v =
+        control.v_di6 ? data_in[6] :
+        control.v_ir5 ? reg_opcode[5] :
+        control.v_alu ? alu_v_out :
+        flag_v;
 
     // Z Flag
     uwire logic next_z =
