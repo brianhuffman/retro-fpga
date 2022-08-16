@@ -203,7 +203,7 @@ module cpu6502
 
     // New values for Registers and Flags
     var logic [7:0] next_a, next_x, next_y;
-    var logic next_d, next_i, next_c;
+    var logic next_i, next_c;
     always_comb begin
         // When is entire P register updated?
         var logic load_p
@@ -213,7 +213,6 @@ module cpu6502
         next_a = reg_a;
         next_x = reg_x;
         next_y = reg_y;
-        next_d = flag_d;
         next_i = flag_i;
         next_c = flag_c;
         if (reg_state.byte1) begin
@@ -246,7 +245,6 @@ module cpu6502
             // 0a  ZC- ZC- ZC- ZC- Z-- Z-- Z-- ---
             // 1a  --- --- --- --- --- Z-- --- ---
 
-            if (opcode_cld_sed) next_d = reg_opcode[5];
             if (opcode_cli_sei) next_i = reg_opcode[5];
             if (opcode_clc_sec) next_c = reg_opcode[5];
             if (opcode_txa) next_a = reg_x;
@@ -265,7 +263,6 @@ module cpu6502
             end
         end
         if (load_p) begin
-            next_d = data_in[3];
             next_i = data_in[2];
             next_c = data_in[0];
         end
@@ -306,6 +303,8 @@ module cpu6502
         logic v_di6;         // set V flag from bit 6 of data_in
         logic v_ir5;         // set V flag from bit 5 of Instruction Register
         logic v_alu;         // set V flag from ALU unit
+        logic d_di3;         // set D flag from bit 3 of data_in
+        logic d_ir5;         // set D flag from bit 5 of Instruction Register
         logic z_dbz;         // set Z flag from DB == 0
     } control;
 
@@ -336,7 +335,8 @@ module cpu6502
             if (opcode_adc_sbc) begin
                 control.v_alu = 1;
             end
-            if (opcode_clv) control.v_ir5 = 1;
+            if (opcode_clv)     control.v_ir5 = 1;
+            if (opcode_cld_sed) control.d_ir5 = 1;
             if (opcode_txa | opcode_tya) begin
                 control.db_next_a = 1;
             end
@@ -695,6 +695,12 @@ module cpu6502
         control.v_ir5 ? reg_opcode[5] :
         control.v_alu ? alu_v_out :
         flag_v;
+
+    // D Flag
+    uwire logic next_d =
+        control.d_di3 ? data_in[3] :
+        control.d_ir5 ? reg_opcode[5] :
+        flag_d;
 
     // Z Flag
     uwire logic next_z =
