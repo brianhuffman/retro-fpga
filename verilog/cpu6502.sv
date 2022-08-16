@@ -295,23 +295,7 @@ module cpu6502
             control.pc.increment = 1;
 
             // Set flags and registers based on previous instruction
-            if (opcode_load & ~opcode_1_byte) begin
-                control.db.data_in = 1;
-            end
-            if (opcode_bit) begin
-                control.n.di7 = 1;
-                control.v.di6 = 1;
-                control.z.dbz = 1;
-            end
-            if (opcode_adc_sbc) begin
-                control.v.alu = 1;
-                control.c.alu = 1;
-            end
-            if (opcode_clv)     control.v.ir5 = 1;
-            if (opcode_cld_sed) control.d.ir5 = 1;
-            if (opcode_cli_sei) control.i.ir5 = 1;
-            if (opcode_clc_sec) control.c.ir5 = 1;
-
+            control.db.data_in = opcode_load & ~opcode_1_byte;
             control.db.a = opcode_tax_tay;
             control.db.x = opcode_txa;
             control.db.y = opcode_tya;
@@ -323,9 +307,24 @@ module cpu6502
             control.db.alu = opcode_arith | opcode_bit;
             control.db.shift = opcode_acc;
 
-            if (opcode_acc) begin
-                control.db.shift = 1;
-                control.c.shift = 1;
+            control.n.di7 = opcode_plp | opcode_bit;
+            control.v.di6 = opcode_plp | opcode_bit;
+            control.d.di3 = opcode_plp;
+            control.i.di2 = opcode_plp;
+            control.z.di1 = opcode_plp;
+            control.c.di0 = opcode_plp;
+
+            control.v.ir5 = opcode_clv;
+            control.d.ir5 = opcode_cld_sed;
+            control.i.ir5 = opcode_cli_sei;
+            control.c.ir5 = opcode_clc_sec;
+
+            control.v.alu = opcode_adc_sbc;
+            control.c.alu = opcode_adc_sbc;
+            control.c.shift = opcode_acc;
+
+            if (opcode_bit) begin
+                control.z.dbz = 1;
             end
 
             if (opcode_txa | opcode_tax | opcode_inx | opcode_dex |
@@ -335,15 +334,6 @@ module cpu6502
             begin
                 control.n.db7 = 1;
                 control.z.dbz = 1;
-            end
-
-            if (opcode_plp) begin
-                control.n.di7 = 1;
-                control.v.di6 = 1;
-                control.d.di3 = 1;
-                control.i.di2 = 1;
-                control.z.di1 = 1;
-                control.c.di0 = 1;
             end
 
             control.a =
