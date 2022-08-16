@@ -220,6 +220,8 @@ module cpu6502
             logic rmw;       // write data from rmw unit
             logic store;     // write data from store instruction
             logic a;         // write data from accumulator
+            logic pch;       // write high byte of PC
+            logic pcl;       // write low byte of PC
         } write;
         struct packed {
             logic xy;        // index with x or y register
@@ -604,7 +606,7 @@ module cpu6502
             control.write.enable = opcode_brk | opcode_php_pha;
             // All stack reads in this cycle are ignored
             // TODO: specify what value to write
-            // brk writes pch
+            control.write.pch = opcode_brk;
             // php writes p
             control.write.a = opcode_pha;
         end
@@ -622,9 +624,8 @@ module cpu6502
             // rti/plp read p
             // rts reads pcl
             // pla reads a
-            // TODO: specify what values are written
-            // brk writes pcl
-            // jsr writes pch
+            control.write.pcl = opcode_brk;
+            control.write.pch = opcode_jsr;
         end
 
         if (reg_state.stack3)
@@ -638,7 +639,7 @@ module cpu6502
             control.write.enable = opcode_brk_jsr;
             // TODO: specify what values are written
             // brk writes p
-            // jsr writes pcl
+            control.write.pcl = opcode_jsr;
             control.n.di7 = opcode_rti;
             control.v.di6 = opcode_rti;
             control.d.di3 = opcode_rti;
@@ -779,6 +780,8 @@ module cpu6502
         control.write.rmw   ? rmw_out :
         control.write.store ? store_out :
         control.write.a     ? reg_a :
+        control.write.pch   ? reg_pc[15:8] :
+        control.write.pcl   ? reg_pc[7:0] :
         8'h00;
 
     // Register updates
