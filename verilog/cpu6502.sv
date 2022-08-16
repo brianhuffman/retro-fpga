@@ -99,6 +99,7 @@ module cpu6502
     uwire logic opcode_jsr          = reg_opcode == 8'h20;
     uwire logic opcode_rti          = reg_opcode == 8'h40;
     uwire logic opcode_rts          = reg_opcode == 8'h60;
+    uwire logic opcode_php          = reg_opcode == 8'h08;
     uwire logic opcode_plp          = reg_opcode == 8'h28;
     uwire logic opcode_pha          = reg_opcode == 8'h48;
     uwire logic opcode_tax          = reg_opcode == 8'hAA;
@@ -220,6 +221,7 @@ module cpu6502
             logic rmw;       // write data from rmw unit
             logic store;     // write data from store instruction
             logic a;         // write data from accumulator
+            logic p;         // write data from status register
             logic pch;       // write high byte of PC
             logic pcl;       // write low byte of PC
         } write;
@@ -605,9 +607,8 @@ module cpu6502
             control.stack.dec = opcode_brk | opcode_php_pha;
             control.write.enable = opcode_brk | opcode_php_pha;
             // All stack reads in this cycle are ignored
-            // TODO: specify what value to write
             control.write.pch = opcode_brk;
-            // php writes p
+            control.write.p = opcode_php;
             control.write.a = opcode_pha;
         end
 
@@ -690,6 +691,11 @@ module cpu6502
         control.db.dec_x   ? dec_x :
         control.db.dec_y   ? dec_y :
         0'h00;
+
+    // P register
+    uwire flag_b = 1'b1; // TODO: set this from a control bit.
+    uwire [7:0] status_out =
+        {flag_n, flag_v, 1'b1, flag_b, flag_d, flag_i, flag_z, flag_c};
 
     // N Flag
     uwire logic next_n =
@@ -780,6 +786,7 @@ module cpu6502
         control.write.rmw   ? rmw_out :
         control.write.store ? store_out :
         control.write.a     ? reg_a :
+        control.write.p     ? status_out :
         control.write.pch   ? reg_pc[15:8] :
         control.write.pcl   ? reg_pc[7:0] :
         8'h00;
