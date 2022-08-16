@@ -203,7 +203,6 @@ module cpu6502
 
     // New values for Registers and Flags
     var logic [7:0] next_a, next_x, next_y;
-    var logic next_c;
     always_comb begin
         // When is entire P register updated?
         var logic load_p
@@ -213,7 +212,6 @@ module cpu6502
         next_a = reg_a;
         next_x = reg_x;
         next_y = reg_y;
-        next_c = flag_c;
         if (reg_state.byte1) begin
             // Load instructions
             if (opcode_lda) next_a = data_in;
@@ -223,14 +221,7 @@ module cpu6502
             if (opcode_alu & !opcode_load_store) begin
                 next_a = alu_out;
             end
-            if (opcode_adc_sbc) begin
-                next_c = alu_c_out;
-            end
             // TODO: CPX/CPY
-        end
-
-        if (reg_state.modify2) begin
-            if (opcode_shift) next_c = rmw_c_out;
         end
 
         if (reg_state.byte1) begin
@@ -244,7 +235,6 @@ module cpu6502
             // 0a  ZC- ZC- ZC- ZC- Z-- Z-- Z-- ---
             // 1a  --- --- --- --- --- Z-- --- ---
 
-            if (opcode_clc_sec) next_c = reg_opcode[5];
             if (opcode_txa) next_a = reg_x;
             if (opcode_tya) next_a = reg_y;
             if (opcode_tax) next_x = reg_a;
@@ -257,11 +247,9 @@ module cpu6502
 
             if (opcode_acc) begin
                 next_a = shift_out;
-                next_c = shift_c_out;
             end
         end
         if (load_p) begin
-            next_c = data_in[0];
         end
         // TODO: implement PLA
     end
@@ -305,6 +293,11 @@ module cpu6502
         logic i_di2;         // set I flag from bit 2 of data_in
         logic i_ir5;         // set I flag from bit 5 of Instruction Register
         logic z_dbz;         // set Z flag from DB == 0
+        logic c_di0;         // set C flag from bit 0 of data_in
+        logic c_ir5;         // set C flag from bit 5 of Instruction Register
+        logic c_alu;         // set C flag from ALU carry out
+        logic c_rmw;         // set C flag from RMW carry out
+        logic c_shift;       // set C flag from accumulator RMW carry out
     } control;
 
     // State machine
@@ -333,10 +326,12 @@ module cpu6502
             end
             if (opcode_adc_sbc) begin
                 control.v_alu = 1;
+                control.c_alu = 1;
             end
             if (opcode_clv)     control.v_ir5 = 1;
             if (opcode_cld_sed) control.d_ir5 = 1;
             if (opcode_cli_sei) control.i_ir5 = 1;
+            if (opcode_clc_sec) control.c_ir5 = 1;
             if (opcode_txa | opcode_tya) begin
                 control.db_next_a = 1;
             end
@@ -348,6 +343,7 @@ module cpu6502
             end
             if (opcode_acc) begin
                 control.db_shift = 1;
+                control.c_shift = 1;
             end
 
             if (opcode_txa | opcode_tax | opcode_inx | opcode_dex |
@@ -574,6 +570,7 @@ module cpu6502
             control.db_rmw = 1;
             control.n_db7 = 1;
             control.z_dbz = 1;
+            control.c_rmw = opcode_shift;
         end
 
         if (reg_state.branch1)
@@ -712,6 +709,15 @@ module cpu6502
     uwire logic next_z =
         control.z_dbz ? (db == 8'h00) :
         flag_z;
+
+    // C Flag
+    uwire logic next_c =
+        control.c_di0 ? data_in[0] :
+        control.c_ir5 ? reg_opcode[5] :
+        control.c_alu ? alu_c_out :
+        control.c_rmw ? rmw_c_out :
+        control.c_shift ? shift_c_out :
+        flag_c;
 
     // Program counter
     uwire logic [15:0] pc_inc = reg_pc + 16'(control.pc_increment);
