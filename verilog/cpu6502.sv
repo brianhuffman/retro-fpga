@@ -129,19 +129,10 @@ module cpu6502
     // 010 = BVC, 011 = BVS
     // 100 = BCC, 101 = BCS
     // 110 = BNE, 111 = BEQ
-    var logic branch_taken;
-    var logic [9:0] branch_result;
-    always_comb begin
-        var logic flag;
-        case (reg_opcode[7:6])
-            2'b00: flag = flag_n;
-            2'b01: flag = flag_v;
-            2'b10: flag = flag_c;
-            2'b11: flag = flag_z;
-        endcase // case (reg_opcode[7:6])
-        branch_taken = (flag == reg_opcode[5]);
-        branch_result = {2'b0, reg_pc[7:0]} + {{2{data_in[7]}}, data_in};
-    end
+    uwire logic [3:0] branch_flags = {flag_z, flag_c, flag_v, flag_n};
+    uwire logic branch_flag = branch_flags[reg_opcode[7:6]];
+    uwire logic branch_taken = (branch_flag == reg_opcode[5]);
+    uwire logic [9:0] branch_result = {2'b0, reg_pc[7:0]} + {{2{data_in[7]}}, data_in};
 
     // ALU inputs are A, B, op, carry_in, decimal
     // ALU outputs are result, overflow, carry
