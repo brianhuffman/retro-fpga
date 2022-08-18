@@ -278,8 +278,8 @@ module cpu6502
 
     always_comb begin
         // Default all control signals to 0
-        control = '{ default: 0 };
-        next_state = '{ default: 0 };
+        control = '0;
+        next_state = '0;
 
         if (reg_state.byte1)
         begin
