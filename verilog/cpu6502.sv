@@ -198,6 +198,7 @@ module cpu6502
             logic vector;    // set pc from last two bytes read
         } pc;
         struct packed {
+            logic pc;        // ADH = PCH, ADL = PCL
             logic stack;     // ADH = 01, ADL = S
             logic zp1;       // ADH = 00, ADL = data_in
             logic zp2;       // ADH = 00, ADL = indexed
@@ -284,6 +285,7 @@ module cpu6502
         begin
             // Requesting opcode byte
             next_state.byte2 = 1;
+            control.addr.pc = 1;
             control.pc.increment = 1;
 
             // Set flags and registers based on previous instruction
@@ -344,6 +346,7 @@ module cpu6502
         begin
             // Requesting byte after opcode byte
             // Opcode available on data_in and reg_opcode
+            control.addr.pc = 1;
             control.pc.increment = ~opcode_1_byte;
 
             next_state.zeropage1 = opcode_zeropage_any | opcode_indirect_any;
@@ -437,6 +440,7 @@ module cpu6502
             // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X  1101
             // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X  1110 (Y for shx/LDX)
             // 1f  slo rla sre rra sha lax dcp isb  $0000,X  1111 (Y for sha/lax)
+            control.addr.pc = 1;
             control.pc.increment = 1;
             if (opcode_jmp_abs) begin
                 next_state.byte1 = 1;
@@ -563,6 +567,7 @@ module cpu6502
             // xxx_100_00 (10)
             // 10  BPL BMI BVC BVS BCC BCS BNE BEQ
             // 12   -   -   -   -   -   -   -   -
+            control.addr.pc = 1;
             control.pc.branch1 = 1;
             if (branch_result[9:8] == 2'b00)
                 next_state.byte1 = 1;
@@ -573,6 +578,7 @@ module cpu6502
         if (reg_state.branch2)
         begin
             // Fixup high byte of PC for branch
+            control.addr.pc = 1;
             control.pc.branch2 = 1;
             next_state.byte1 = 1;
         end
@@ -749,6 +755,7 @@ module cpu6502
 
     // Bus address
     uwire logic [15:0] address_out =
+        control.addr.pc    ? reg_pc :
         control.addr.stack ? {8'h01, reg_s} :
         control.addr.zp1   ? {8'h00, data_in} :
         control.addr.zp2   ? {8'h00, reg_index[7:0]} :
@@ -757,7 +764,7 @@ module cpu6502
         control.addr.hold  ? reg_addr :
         control.addr.inc   ? {reg_addr[15:8], reg_addr[7:0] + 8'h1} :
         control.addr.carry ? {reg_fixpage, reg_addr[7:0]} :
-        reg_pc;
+        '0;
 
     // Data out
     uwire logic [7:0] data_out =
