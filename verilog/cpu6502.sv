@@ -606,6 +606,7 @@ module cpu6502
             // rti/plp read p
             // rts reads pcl
             // pla reads a
+            control.write.enable = opcode_brk_jsr;
             control.write.pcl = opcode_brk;
             control.write.pch = opcode_jsr;
         end
