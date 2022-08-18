@@ -55,91 +55,91 @@ module cpu6502
     var logic [7:0]  reg_data_in; // registered input
     // TODO: registered input for irq, nmi, set_overflow
 
-    uwire logic [7:0] data_in = reg_data_in;
+    wire logic [7:0] data_in = reg_data_in;
 
     // Instruction decoding
-    uwire logic opcode_alu          = reg_opcode ==? 8'b???_???_?1; // ALU (unless load/store/implied)
-    uwire logic opcode_rmw          = reg_opcode ==? 8'b???_???_1?; // RMW (unless load/store/implied)
-    uwire logic opcode_1_byte       = reg_opcode ==? 8'b???_?10_?0; // implied
-    uwire logic opcode_relative     = reg_opcode ==? 8'b???_100_00;
+    wire logic opcode_alu          = reg_opcode ==? 8'b???_???_?1; // ALU (unless load/store/implied)
+    wire logic opcode_rmw          = reg_opcode ==? 8'b???_???_1?; // RMW (unless load/store/implied)
+    wire logic opcode_1_byte       = reg_opcode ==? 8'b???_?10_?0; // implied
+    wire logic opcode_relative     = reg_opcode ==? 8'b???_100_00;
 
-    uwire logic opcode_indirect_any = reg_opcode ==? 8'b???_?00_?1; // ($00,X) or ($00),Y
-    uwire logic opcode_zeropage_any = reg_opcode ==? 8'b???_?01_??; // $00 or $00,X
-    uwire logic opcode_absolute_any = reg_opcode ==? 8'b???_?11_??; // $0000 or $0000,X
+    wire logic opcode_indirect_any = reg_opcode ==? 8'b???_?00_?1; // ($00,X) or ($00),Y
+    wire logic opcode_zeropage_any = reg_opcode ==? 8'b???_?01_??; // $00 or $00,X
+    wire logic opcode_absolute_any = reg_opcode ==? 8'b???_?11_??; // $0000 or $0000,X
 
-    uwire logic opcode_indirect_x   = reg_opcode ==? 8'b???_000_?1; // ($00,X)
-    uwire logic opcode_zeropage     = reg_opcode ==? 8'b???_001_??; // $00
-    uwire logic opcode_immediate_a  = reg_opcode ==? 8'b???_010_?1; // #$00
-    uwire logic opcode_absolute     = reg_opcode ==? 8'b???_011_??; // $0000
-    uwire logic opcode_indirect_y   = reg_opcode ==? 8'b???_100_?1; // ($00),Y
-    uwire logic opcode_zeropage_x   = reg_opcode ==? 8'b???_101_??; // $00,X
-    uwire logic opcode_absolute_y   = reg_opcode ==? 8'b???_110_?1; // $0000,Y
-    uwire logic opcode_absolute_x   = reg_opcode ==? 8'b???_111_??; // $0000,X
+    wire logic opcode_indirect_x   = reg_opcode ==? 8'b???_000_?1; // ($00,X)
+    wire logic opcode_zeropage     = reg_opcode ==? 8'b???_001_??; // $00
+    wire logic opcode_immediate_a  = reg_opcode ==? 8'b???_010_?1; // #$00
+    wire logic opcode_absolute     = reg_opcode ==? 8'b???_011_??; // $0000
+    wire logic opcode_indirect_y   = reg_opcode ==? 8'b???_100_?1; // ($00),Y
+    wire logic opcode_zeropage_x   = reg_opcode ==? 8'b???_101_??; // $00,X
+    wire logic opcode_absolute_y   = reg_opcode ==? 8'b???_110_?1; // $0000,Y
+    wire logic opcode_absolute_x   = reg_opcode ==? 8'b???_111_??; // $0000,X
 
-    uwire logic opcode_stack        = reg_opcode ==? 8'b0??_0?0_00; // BRK/JSR/RTI/RTS/PHP/PLP/PHA/PLA
-    uwire logic opcode_immediate_xy = reg_opcode ==? 8'b1??_000_?0; // LDX/LDY/CPX/CPY #$00
-    uwire logic opcode_acc          = reg_opcode ==? 8'b0??_010_10; // ASL/ROL/LSR/ROR accumulator
-    uwire logic opcode_shift        = reg_opcode ==? 8'b0??_???_1?; // ASL/ROL/LSR/ROR (unless implied/immediate)
-    uwire logic opcode_dec_inc      = reg_opcode ==? 8'b11?_???_1?; // INC/DEC/isb/dcp (unless implied/immediate)
-    uwire logic opcode_load_store   = reg_opcode ==? 8'b10?_???_??; // ST* or LD* (unless BCC/BCS/CLV)
-    uwire logic opcode_store        = reg_opcode ==? 8'b100_???_??; // ST*
-    uwire logic opcode_load         = reg_opcode ==? 8'b101_???_??; // LD*
-    uwire logic opcode_ldx          = reg_opcode ==? 8'b101_???_1?; // LDX/TAX/TSX/lax/lxa/lae
-    uwire logic opcode_lda          = reg_opcode ==? 8'b101_???_?1; // LDA/lax
-    uwire logic opcode_ldy          = reg_opcode ==? 8'b101_???_00; // LDY/TAY (unless BCS/CLV)
-    uwire logic opcode_adc_sbc      = reg_opcode ==? 8'b?11_???_?1; // ADC/SBC/rra/isb
-    uwire logic opcode_bit          = reg_opcode ==? 8'b001_0?1_00; // BIT $00 or BIT $0000
-    uwire logic opcode_tax_tay      = reg_opcode ==? 8'b101_010_?0; // TAX/TAY
+    wire logic opcode_stack        = reg_opcode ==? 8'b0??_0?0_00; // BRK/JSR/RTI/RTS/PHP/PLP/PHA/PLA
+    wire logic opcode_immediate_xy = reg_opcode ==? 8'b1??_000_?0; // LDX/LDY/CPX/CPY #$00
+    wire logic opcode_acc          = reg_opcode ==? 8'b0??_010_10; // ASL/ROL/LSR/ROR accumulator
+    wire logic opcode_shift        = reg_opcode ==? 8'b0??_???_1?; // ASL/ROL/LSR/ROR (unless implied/immediate)
+    wire logic opcode_dec_inc      = reg_opcode ==? 8'b11?_???_1?; // INC/DEC/isb/dcp (unless implied/immediate)
+    wire logic opcode_load_store   = reg_opcode ==? 8'b10?_???_??; // ST* or LD* (unless BCC/BCS/CLV)
+    wire logic opcode_store        = reg_opcode ==? 8'b100_???_??; // ST*
+    wire logic opcode_load         = reg_opcode ==? 8'b101_???_??; // LD*
+    wire logic opcode_ldx          = reg_opcode ==? 8'b101_???_1?; // LDX/TAX/TSX/lax/lxa/lae
+    wire logic opcode_lda          = reg_opcode ==? 8'b101_???_?1; // LDA/lax
+    wire logic opcode_ldy          = reg_opcode ==? 8'b101_???_00; // LDY/TAY (unless BCS/CLV)
+    wire logic opcode_adc_sbc      = reg_opcode ==? 8'b?11_???_?1; // ADC/SBC/rra/isb
+    wire logic opcode_bit          = reg_opcode ==? 8'b001_0?1_00; // BIT $00 or BIT $0000
+    wire logic opcode_tax_tay      = reg_opcode ==? 8'b101_010_?0; // TAX/TAY
 
-    uwire logic opcode_php_pha      = reg_opcode ==? 8'b0?0_010_00; // PHP/PHA
-    uwire logic opcode_plp_pla      = reg_opcode ==? 8'b0?1_010_00; // PLP/PLA
-    uwire logic opcode_brk_jsr      = reg_opcode ==? 8'b00?_000_00; // BRK/JSR
-    uwire logic opcode_rti_rts      = reg_opcode ==? 8'b01?_000_00; // RTI/RTS
-    uwire logic opcode_brk          = reg_opcode == 8'h00;
-    uwire logic opcode_jsr          = reg_opcode == 8'h20;
-    uwire logic opcode_rti          = reg_opcode == 8'h40;
-    uwire logic opcode_rts          = reg_opcode == 8'h60;
-    uwire logic opcode_php          = reg_opcode == 8'h08;
-    uwire logic opcode_plp          = reg_opcode == 8'h28;
-    uwire logic opcode_pha          = reg_opcode == 8'h48;
-    uwire logic opcode_pla          = reg_opcode == 8'h68;
-    uwire logic opcode_tax          = reg_opcode == 8'hAA;
-    uwire logic opcode_tay          = reg_opcode == 8'hA8;
-    uwire logic opcode_tsx          = reg_opcode == 8'hBA;
-    uwire logic opcode_dex          = reg_opcode == 8'hCA;
-    uwire logic opcode_inx          = reg_opcode == 8'hE8;
-    uwire logic opcode_dey          = reg_opcode == 8'h88;
-    uwire logic opcode_iny          = reg_opcode == 8'hC8;
-    uwire logic opcode_txa          = reg_opcode == 8'h8A;
-    uwire logic opcode_tya          = reg_opcode == 8'h98;
-    uwire logic opcode_clv          = reg_opcode == 8'hB8;
-    uwire logic opcode_jmp_abs      = reg_opcode == 8'h4C;
-    uwire logic opcode_cld_sed      = reg_opcode ==? 8'b11?_110_00; // CLD/SED
-    uwire logic opcode_cli_sei      = reg_opcode ==? 8'b01?_110_00; // CLI/SEI
-    uwire logic opcode_clc_sec      = reg_opcode ==? 8'b00?_110_00; // CLC/SEC
+    wire logic opcode_php_pha      = reg_opcode ==? 8'b0?0_010_00; // PHP/PHA
+    wire logic opcode_plp_pla      = reg_opcode ==? 8'b0?1_010_00; // PLP/PLA
+    wire logic opcode_brk_jsr      = reg_opcode ==? 8'b00?_000_00; // BRK/JSR
+    wire logic opcode_rti_rts      = reg_opcode ==? 8'b01?_000_00; // RTI/RTS
+    wire logic opcode_brk          = reg_opcode == 8'h00;
+    wire logic opcode_jsr          = reg_opcode == 8'h20;
+    wire logic opcode_rti          = reg_opcode == 8'h40;
+    wire logic opcode_rts          = reg_opcode == 8'h60;
+    wire logic opcode_php          = reg_opcode == 8'h08;
+    wire logic opcode_plp          = reg_opcode == 8'h28;
+    wire logic opcode_pha          = reg_opcode == 8'h48;
+    wire logic opcode_pla          = reg_opcode == 8'h68;
+    wire logic opcode_tax          = reg_opcode == 8'hAA;
+    wire logic opcode_tay          = reg_opcode == 8'hA8;
+    wire logic opcode_tsx          = reg_opcode == 8'hBA;
+    wire logic opcode_dex          = reg_opcode == 8'hCA;
+    wire logic opcode_inx          = reg_opcode == 8'hE8;
+    wire logic opcode_dey          = reg_opcode == 8'h88;
+    wire logic opcode_iny          = reg_opcode == 8'hC8;
+    wire logic opcode_txa          = reg_opcode == 8'h8A;
+    wire logic opcode_tya          = reg_opcode == 8'h98;
+    wire logic opcode_clv          = reg_opcode == 8'hB8;
+    wire logic opcode_jmp_abs      = reg_opcode == 8'h4C;
+    wire logic opcode_cld_sed      = reg_opcode ==? 8'b11?_110_00; // CLD/SED
+    wire logic opcode_cli_sei      = reg_opcode ==? 8'b01?_110_00; // CLI/SEI
+    wire logic opcode_clc_sec      = reg_opcode ==? 8'b00?_110_00; // CLC/SEC
 
-    uwire logic opcode_3_byte       = opcode_absolute_any | opcode_absolute_y;
-    uwire logic opcode_arith        = opcode_alu & ~opcode_load_store;
-    uwire logic opcode_modify       = opcode_rmw & ~opcode_load_store;
-    uwire logic opcode_imm_any      = opcode_immediate_a | opcode_immediate_xy;
-    uwire logic opcode_2_cycle      = opcode_imm_any | (opcode_1_byte & ~opcode_stack);
+    wire logic opcode_3_byte       = opcode_absolute_any | opcode_absolute_y;
+    wire logic opcode_arith        = opcode_alu & ~opcode_load_store;
+    wire logic opcode_modify       = opcode_rmw & ~opcode_load_store;
+    wire logic opcode_imm_any      = opcode_immediate_a | opcode_immediate_xy;
+    wire logic opcode_2_cycle      = opcode_imm_any | (opcode_1_byte & ~opcode_stack);
 
     // Conditional branches (opcode xxx_100_00)
     // 000 = BPL, 001 = BMI
     // 010 = BVC, 011 = BVS
     // 100 = BCC, 101 = BCS
     // 110 = BNE, 111 = BEQ
-    uwire logic [3:0] branch_flags = {flag_z, flag_c, flag_v, flag_n};
-    uwire logic branch_flag = branch_flags[reg_opcode[7:6]];
-    uwire logic branch_taken = (branch_flag == reg_opcode[5]);
-    uwire logic [9:0] branch_result = {2'b0, reg_pc[7:0]} + {{2{data_in[7]}}, data_in};
+    wire logic [3:0] branch_flags = {flag_z, flag_c, flag_v, flag_n};
+    wire logic branch_flag = branch_flags[reg_opcode[7:6]];
+    wire logic branch_taken = (branch_flag == reg_opcode[5]);
+    wire logic [9:0] branch_result = {2'b0, reg_pc[7:0]} + {{2{data_in[7]}}, data_in};
 
     // ALU inputs are A, B, op, carry_in, decimal
     // ALU outputs are result, overflow, carry
 
     // ALU
-    uwire logic [7:0] alu_out;
-    uwire logic alu_c_out, alu_v_out;
+    wire logic [7:0] alu_out;
+    wire logic alu_c_out, alu_v_out;
     // operands come from accumulator and data bus
     cpu6502_alu alu
         ( .a_in(reg_a),
@@ -152,8 +152,8 @@ module cpu6502
           .result(alu_out) );
 
     // Accumulator shift unit
-    uwire logic [7:0] shift_out;
-    uwire logic shift_c_out;
+    wire logic [7:0] shift_out;
+    wire logic shift_c_out;
     cpu6502_shift shift
         ( .data_in(reg_a),
           .c_in(flag_c),
@@ -163,14 +163,14 @@ module cpu6502
 
     // Index register increment/decrement
     // ca DEX, e8 INX, 88 DEY, c8 INY
-    uwire logic [7:0] dec_x = reg_x - 1'b1;
-    uwire logic [7:0] inc_x = reg_x + 1'b1;
-    uwire logic [7:0] dec_y = reg_y - 1'b1;
-    uwire logic [7:0] inc_y = reg_y + 1'b1;
+    wire logic [7:0] dec_x = reg_x - 1'b1;
+    wire logic [7:0] inc_x = reg_x + 1'b1;
+    wire logic [7:0] dec_y = reg_y - 1'b1;
+    wire logic [7:0] inc_y = reg_y + 1'b1;
 
     // RMW unit
-    uwire logic [7:0] rmw_out;
-    uwire logic rmw_c_out;
+    wire logic [7:0] rmw_out;
+    wire logic rmw_c_out;
     cpu6502_shift rmw
         ( .data_in(data_in),
           .c_in(flag_c),
@@ -665,7 +665,7 @@ module cpu6502
     end
 
     // Internal Data Bus
-    uwire logic [7:0] db =
+    wire logic [7:0] db =
         control.db.data_in ? data_in :
         control.db.rmw     ? rmw_out :
         control.db.alu     ? alu_out :
@@ -680,43 +680,43 @@ module cpu6502
         8'h00;
 
     // P register
-    uwire flag_b = 1'b1; // TODO: set this from a control bit.
-    uwire [7:0] status_out =
+    wire logic flag_b = 1'b1; // TODO: set this from a control bit.
+    wire logic [7:0] status_out =
         {flag_n, flag_v, 1'b1, flag_b, flag_d, flag_i, flag_z, flag_c};
 
     // N Flag
-    uwire logic next_n =
+    wire logic next_n =
         control.n.di7 ? data_in[7] :
         control.n.db7 ? db[7] :
         flag_n;
 
     // V Flag
-    uwire logic next_v =
+    wire logic next_v =
         control.v.di6 ? data_in[6] :
         control.v.ir5 ? reg_opcode[5] :
         control.v.alu ? alu_v_out :
         flag_v;
 
     // D Flag
-    uwire logic next_d =
+    wire logic next_d =
         control.d.di3 ? data_in[3] :
         control.d.ir5 ? reg_opcode[5] :
         flag_d;
 
     // I Flag
-    uwire logic next_i =
+    wire logic next_i =
         control.i.di2 ? data_in[2] :
         control.i.ir5 ? reg_opcode[5] :
         flag_i;
 
     // Z Flag
-    uwire logic next_z =
+    wire logic next_z =
         control.z.di1 ? data_in[1] :
         control.z.dbz ? (db == 8'h00) :
         flag_z;
 
     // C Flag
-    uwire logic next_c =
+    wire logic next_c =
         control.c.di0 ? data_in[0] :
         control.c.ir5 ? reg_opcode[5] :
         control.c.alu ? alu_c_out :
@@ -725,36 +725,36 @@ module cpu6502
         flag_c;
 
     // Accumulator register
-    uwire logic [7:0] next_a = control.a ? db : reg_a;
+    wire logic [7:0] next_a = control.a ? db : reg_a;
 
     // X index register
-    uwire logic [7:0] next_x = control.x ? db : reg_x;
+    wire logic [7:0] next_x = control.x ? db : reg_x;
 
     // Y index register
-    uwire logic [7:0] next_y = control.y ? db : reg_y;
+    wire logic [7:0] next_y = control.y ? db : reg_y;
 
     // Program counter
-    uwire logic [15:0] pc_inc = reg_pc + 16'(control.pc.increment);
-    uwire logic [7:0]  branch_carry = {{7{reg_branch[9]}}, reg_branch[8]};
-    uwire logic [15:0] next_pc =
+    wire logic [15:0] pc_inc = reg_pc + 16'(control.pc.increment);
+    wire logic [7:0]  branch_carry = {{7{reg_branch[9]}}, reg_branch[8]};
+    wire logic [15:0] next_pc =
         control.pc.branch1 ? {reg_pc[15:8], branch_result[7:0]} :
         control.pc.branch2 ? {reg_pc[15:8] + branch_carry, reg_pc[7:0]} :
         control.pc.vector  ? {io_data_in, reg_data_in} :
         pc_inc;
 
     // Stack register
-    uwire logic [7:0] next_s =
+    wire logic [7:0] next_s =
         reg_s + {8{control.stack.dec}} + 8'(control.stack.inc);
 
     // Indexing calculations
-    uwire logic [7:0] index = control.index.y ? reg_y : reg_x;
-    uwire logic [7:0] offset = control.index.xy ? index : 8'h00;
+    wire logic [7:0] index = control.index.y ? reg_y : reg_x;
+    wire logic [7:0] offset = control.index.xy ? index : 8'h00;
     // 9-bit value includes carry bit
-    uwire logic [8:0] next_index = data_in + offset;
-    uwire logic [7:0] next_fixpage = data_in + 8'(reg_index[8]);
+    wire logic [8:0] next_index = data_in + offset;
+    wire logic [7:0] next_fixpage = data_in + 8'(reg_index[8]);
 
     // Bus address
-    uwire logic [15:0] address_out =
+    wire logic [15:0] address_out =
         control.addr.pc    ? reg_pc :
         control.addr.stack ? {8'h01, reg_s} :
         control.addr.zp1   ? {8'h00, data_in} :
@@ -767,7 +767,7 @@ module cpu6502
         '0;
 
     // Data out
-    uwire logic [7:0] data_out =
+    wire logic [7:0] data_out =
         control.write.same  ? data_in :
         control.write.rmw   ? rmw_out :
         control.write.store ? store_out :
@@ -845,14 +845,14 @@ module cpu6502_alu
       );
 
     // CMP and SBC do subtraction
-    uwire logic sub = op[2];
+    wire logic sub = op[2];
 
     // complement 2nd operand if subtracting
-    uwire logic [7:0] addend = sub ? ~b_in : b_in;
+    wire logic [7:0] addend = sub ? ~b_in : b_in;
 
     // binary mode adder
-    uwire logic [8:0] bin_add = a_in + addend + 8'(c_in);
-    uwire logic [7:0] add_result = bin_add[7:0]; // TODO: decimal mode
+    wire logic [8:0] bin_add = a_in + addend + 8'(c_in);
+    wire logic [7:0] add_result = bin_add[7:0]; // TODO: decimal mode
 
     always_comb begin
         case (op)
@@ -881,10 +881,10 @@ module cpu6502_shift
       output logic [7:0] data_out
       );
 
-    uwire logic rotate = op[0];
-    uwire logic right = op[1];
-    uwire logic inc_dec = op[2];
-    uwire logic carry = c_in & rotate;
+    wire logic rotate = op[0];
+    wire logic right = op[1];
+    wire logic inc_dec = op[2];
+    wire logic carry = c_in & rotate;
 
     always_comb begin
         if (inc_dec) begin
