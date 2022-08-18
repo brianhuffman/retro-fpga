@@ -133,6 +133,9 @@ module cpu6502
     wire logic opcode_update_y =
         opcode_ldy | opcode_tay | opcode_dey | opcode_iny;
 
+    wire logic opcode_update_nz =
+        opcode_update_a | opcode_update_x | opcode_update_y;
+
     // Conditional branches (opcode xxx_100_00)
     // 000 = BPL, 001 = BMI
     // 010 = BVC, 011 = BVS
@@ -326,21 +329,12 @@ module cpu6502
             control.c.alu = opcode_adc_sbc;
             control.c.shift = opcode_acc;
 
-            if (opcode_bit) begin
-                control.z.dbz = 1;
-            end
-
-            if (opcode_update_a | opcode_update_x | opcode_update_y)
-            begin
-                control.n.db7 = 1;
-                control.z.dbz = 1;
-            end
+            control.n.db7 = opcode_update_nz;
+            control.z.dbz = opcode_update_nz | opcode_bit;
 
             control.a = opcode_update_a;
             control.x = opcode_update_x;
             control.y = opcode_update_y;
-
-            // TODO: CPX/CPY
         end
 
         if (reg_state.byte2)
