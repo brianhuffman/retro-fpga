@@ -666,18 +666,17 @@ module cpu6502
 
     // Internal Data Bus
     wire logic [7:0] db =
-        control.db.data_in ? data_in :
-        control.db.rmw     ? rmw_out :
-        control.db.alu     ? alu_out :
-        control.db.shift   ? shift_out :
-        control.db.a       ? reg_a :
-        control.db.x       ? reg_x :
-        control.db.y       ? reg_y :
-        control.db.inc_x   ? inc_x :
-        control.db.inc_y   ? inc_y :
-        control.db.dec_x   ? dec_x :
-        control.db.dec_y   ? dec_y :
-        8'h00;
+        (control.db.data_in ? data_in   : '0) |
+        (control.db.rmw     ? rmw_out   : '0) |
+        (control.db.alu     ? alu_out   : '0) |
+        (control.db.shift   ? shift_out : '0) |
+        (control.db.a       ? reg_a     : '0) |
+        (control.db.x       ? reg_x     : '0) |
+        (control.db.y       ? reg_y     : '0) |
+        (control.db.inc_x   ? inc_x     : '0) |
+        (control.db.inc_y   ? inc_y     : '0) |
+        (control.db.dec_x   ? dec_x     : '0) |
+        (control.db.dec_y   ? dec_y     : '0);
 
     // P register
     wire logic flag_b = 1'b1; // TODO: set this from a control bit.
@@ -755,27 +754,25 @@ module cpu6502
 
     // Bus address
     wire logic [15:0] address_out =
-        control.addr.pc    ? reg_pc :
-        control.addr.stack ? {8'h01, reg_s} :
-        control.addr.zp1   ? {8'h00, data_in} :
-        control.addr.zp2   ? {8'h00, reg_index[7:0]} :
-        control.addr.abs   ? {data_in, reg_index[7:0]} :
-        control.addr.fffe  ? 16'hfffe :
-        control.addr.hold  ? reg_addr :
-        control.addr.inc   ? {reg_addr[15:8], reg_addr[7:0] + 8'h1} :
-        control.addr.carry ? {reg_fixpage, reg_addr[7:0]} :
-        '0;
+        (control.addr.pc    ? reg_pc                                 : '0) |
+        (control.addr.stack ? {8'h01, reg_s}                         : '0) |
+        (control.addr.zp1   ? {8'h00, data_in}                       : '0) |
+        (control.addr.zp2   ? {8'h00, reg_index[7:0]}                : '0) |
+        (control.addr.abs   ? {data_in, reg_index[7:0]}              : '0) |
+        (control.addr.fffe  ? 16'hfffe                               : '0) |
+        (control.addr.hold  ? reg_addr                               : '0) |
+        (control.addr.inc   ? {reg_addr[15:8], reg_addr[7:0] + 8'h1} : '0) |
+        (control.addr.carry ? {reg_fixpage, reg_addr[7:0]}           : '0);
 
     // Data out
     wire logic [7:0] data_out =
-        control.write.same  ? data_in :
-        control.write.rmw   ? rmw_out :
-        control.write.store ? store_out :
-        control.write.a     ? reg_a :
-        control.write.p     ? status_out :
-        control.write.pch   ? reg_pc[15:8] :
-        control.write.pcl   ? reg_pc[7:0] :
-        8'h00;
+        (control.write.same  ? data_in      : '0) |
+        (control.write.rmw   ? rmw_out      : '0) |
+        (control.write.store ? store_out    : '0) |
+        (control.write.a     ? reg_a        : '0) |
+        (control.write.p     ? status_out   : '0) |
+        (control.write.pch   ? reg_pc[15:8] : '0) |
+        (control.write.pcl   ? reg_pc[7:0]  : '0);
 
     // Register updates
     always_ff @(posedge clock) begin
