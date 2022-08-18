@@ -119,10 +119,19 @@ module cpu6502
     wire logic opcode_clc_sec      = reg_opcode ==? 8'b00?_110_00; // CLC/SEC
 
     wire logic opcode_3_byte       = opcode_absolute_any | opcode_absolute_y;
-    wire logic opcode_arith        = opcode_alu & ~opcode_load_store;
+    wire logic opcode_arith        = opcode_alu & ~opcode_load_store; // ORA/AND/EOR/ADC/CMP/SBC
     wire logic opcode_modify       = opcode_rmw & ~opcode_load_store;
     wire logic opcode_imm_any      = opcode_immediate_a | opcode_immediate_xy;
     wire logic opcode_2_cycle      = opcode_imm_any | (opcode_1_byte & ~opcode_stack);
+
+    wire logic opcode_update_a =
+        opcode_lda | opcode_txa | opcode_tya | opcode_acc | opcode_arith | opcode_pla;
+
+    wire logic opcode_update_x =
+        opcode_ldx | opcode_tax | opcode_tsx | opcode_inx | opcode_dex;
+
+    wire logic opcode_update_y =
+        opcode_ldy | opcode_tay | opcode_dey | opcode_iny;
 
     // Conditional branches (opcode xxx_100_00)
     // 000 = BPL, 001 = BMI
@@ -321,23 +330,15 @@ module cpu6502
                 control.z.dbz = 1;
             end
 
-            if (opcode_txa | opcode_tax | opcode_inx | opcode_dex |
-                opcode_tya | opcode_tay | opcode_iny | opcode_dey |
-                opcode_load | opcode_acc | opcode_tsx | opcode_arith | opcode_pla
-                )
+            if (opcode_update_a | opcode_update_x | opcode_update_y)
             begin
                 control.n.db7 = 1;
                 control.z.dbz = 1;
             end
 
-            control.a =
-                opcode_lda | opcode_txa | opcode_tya | opcode_acc | opcode_arith | opcode_pla;
-
-            control.x =
-                opcode_ldx | opcode_tax | opcode_tsx | opcode_inx | opcode_dex;
-
-            control.y =
-                opcode_ldy | opcode_tay | opcode_dey | opcode_iny;
+            control.a = opcode_update_a;
+            control.x = opcode_update_x;
+            control.y = opcode_update_y;
 
             // TODO: CPX/CPY
         end
