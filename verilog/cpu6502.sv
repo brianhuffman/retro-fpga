@@ -677,7 +677,7 @@ module cpu6502
         control.db.inc_y   ? inc_y :
         control.db.dec_x   ? dec_x :
         control.db.dec_y   ? dec_y :
-        0'h00;
+        8'h00;
 
     // P register
     uwire flag_b = 1'b1; // TODO: set this from a control bit.
