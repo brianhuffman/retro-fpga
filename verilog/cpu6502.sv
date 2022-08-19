@@ -86,10 +86,13 @@ module cpu6502
     wire logic opcode_load         = reg_opcode ==? 8'b101_???_??; // LD*
     wire logic opcode_ldx          = reg_opcode ==? 8'b101_???_1?; // LDX/TAX/TSX/lax/lxa/lae
     wire logic opcode_lda          = reg_opcode ==? 8'b101_???_?1; // LDA/lax
-    wire logic opcode_ldy          = reg_opcode ==? 8'b101_???_00; // LDY/TAY (unless BCS/CLV)
+    wire logic opcode_ldy          = reg_opcode ==? 8'b101_??1_00; // LDY ($00/$0000/$00,X/$0000,X)
+    wire logic opcode_ldy_tay      = reg_opcode ==? 8'b101_00?_00; // LDY #$00 / TAY
+    wire logic opcode_lda_sbc      = reg_opcode ==? 8'b1?1_???_?1; // LDA/SBC/lax/isb
     wire logic opcode_adc_sbc      = reg_opcode ==? 8'b?11_???_?1; // ADC/SBC/rra/isb
     wire logic opcode_bit          = reg_opcode ==? 8'b001_0?1_00; // BIT $00 or BIT $0000
     wire logic opcode_tax_tay      = reg_opcode ==? 8'b101_010_?0; // TAX/TAY
+    wire logic opcode_txa          = reg_opcode ==? 8'b100_010_1?; // TXA/ane
 
     wire logic opcode_php_pha      = reg_opcode ==? 8'b0?0_010_00; // PHP/PHA
     wire logic opcode_plp_pla      = reg_opcode ==? 8'b0?1_010_00; // PLP/PLA
@@ -110,13 +113,15 @@ module cpu6502
     wire logic opcode_inx          = reg_opcode == 8'hE8;
     wire logic opcode_dey          = reg_opcode == 8'h88;
     wire logic opcode_iny          = reg_opcode == 8'hC8;
-    wire logic opcode_txa          = reg_opcode == 8'h8A;
     wire logic opcode_tya          = reg_opcode == 8'h98;
     wire logic opcode_clv          = reg_opcode == 8'hB8;
     wire logic opcode_jmp_abs      = reg_opcode == 8'h4C;
     wire logic opcode_cld_sed      = reg_opcode ==? 8'b11?_110_00; // CLD/SED
     wire logic opcode_cli_sei      = reg_opcode ==? 8'b01?_110_00; // CLI/SEI
     wire logic opcode_clc_sec      = reg_opcode ==? 8'b00?_110_00; // CLC/SEC
+    wire logic opcode_alu4         = reg_opcode ==? 8'b0??_???_?1; // ORA/AND/EOR/ADC
+    wire logic opcode_cmp          = reg_opcode ==? 8'b110_???_?1; // CMP
+    wire logic opcode_cpxy_inxy    = reg_opcode ==? 8'b11?_0??_00; // CPX/CPY/INX/INY
 
     wire logic opcode_3_byte       = opcode_absolute_any | opcode_absolute_y;
     wire logic opcode_arith        = opcode_alu & ~opcode_load_store; // ORA/AND/EOR/ADC/CMP/SBC
@@ -125,16 +130,16 @@ module cpu6502
     wire logic opcode_2_cycle      = opcode_imm_any | (opcode_1_byte & ~opcode_stack);
 
     wire logic opcode_update_a =
-        opcode_lda | opcode_txa | opcode_tya | opcode_acc | opcode_arith | opcode_pla;
+        opcode_alu4 | opcode_lda_sbc | opcode_acc | opcode_txa | opcode_tya | opcode_pla;
 
     wire logic opcode_update_x =
-        opcode_ldx | opcode_tax | opcode_tsx | opcode_inx | opcode_dex;
+        opcode_ldx | opcode_inx | opcode_dex;
 
     wire logic opcode_update_y =
-        opcode_ldy | opcode_tay | opcode_dey | opcode_iny;
+        opcode_ldy | opcode_ldy_tay | opcode_dey | opcode_iny;
 
     wire logic opcode_update_nz =
-        opcode_update_a | opcode_update_x | opcode_update_y;
+        opcode_update_a | opcode_update_x | opcode_update_y | opcode_cmp | opcode_cpxy_inxy;
 
     // Conditional branches (opcode xxx_100_00)
     // 000 = BPL, 001 = BMI
