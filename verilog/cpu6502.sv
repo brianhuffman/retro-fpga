@@ -87,7 +87,7 @@ module cpu6502
     wire logic opcode_ldx          = reg_opcode ==? 8'b101_???_1?; // LDX/TAX/TSX/lax/lxa/lae
     wire logic opcode_lda          = reg_opcode ==? 8'b101_???_?1; // LDA/lax
     wire logic opcode_ldy          = reg_opcode ==? 8'b101_??1_00; // LDY ($00/$0000/$00,X/$0000,X)
-    wire logic opcode_ldy_tay      = reg_opcode ==? 8'b101_00?_00; // LDY #$00 / TAY
+    wire logic opcode_ldy_tay      = reg_opcode ==? 8'b101_0?0_00; // LDY #$00 / TAY
     wire logic opcode_lda_sbc      = reg_opcode ==? 8'b1?1_???_?1; // LDA/SBC/lax/isb
     wire logic opcode_adc_sbc      = reg_opcode ==? 8'b?11_???_?1; // ADC/SBC/rra/isb
     wire logic opcode_bit          = reg_opcode ==? 8'b001_0?1_00; // BIT $00 or BIT $0000
