@@ -125,7 +125,7 @@ module cpu6502
 
     wire logic opcode_3_byte       = opcode_absolute_any | opcode_absolute_y;
     wire logic opcode_arith        = opcode_alu & ~opcode_load_store; // ORA/AND/EOR/ADC/CMP/SBC
-    wire logic opcode_modify       = opcode_rmw & ~opcode_load_store;
+    wire logic opcode_modify       = opcode_rmw & ~opcode_load_store; // ASL/ROL/LSR/ROR/DEC/INC
     wire logic opcode_imm_any      = opcode_immediate_a | opcode_immediate_xy;
     wire logic opcode_2_cycle      = opcode_imm_any | (opcode_1_byte & ~opcode_stack);
 
@@ -177,13 +177,6 @@ module cpu6502
           .op(reg_opcode[7:5]),
           .c_out(shift_c_out),
           .data_out(shift_out) );
-
-    // Index register increment/decrement
-    // ca DEX, e8 INX, 88 DEY, c8 INY
-    wire logic [7:0] dec_x = reg_x - 1'b1;
-    wire logic [7:0] inc_x = reg_x + 1'b1;
-    wire logic [7:0] dec_y = reg_y - 1'b1;
-    wire logic [7:0] inc_y = reg_y + 1'b1;
 
     // RMW unit
     wire logic [7:0] rmw_out;
@@ -665,18 +658,18 @@ module cpu6502
     end
 
     // Internal Data Bus
+    wire logic [7:0] count_x =
+        reg_x + {8{control.db.dec_x}} + 8'(control.db.inc_x);
+    wire logic [7:0] count_y =
+        reg_y + {8{control.db.dec_y}} + 8'(control.db.inc_y);
     wire logic [7:0] db =
         (control.db.data_in ? data_in   : '0) |
         (control.db.rmw     ? rmw_out   : '0) |
         (control.db.alu     ? alu_out   : '0) |
         (control.db.shift   ? shift_out : '0) |
         (control.db.a       ? reg_a     : '0) |
-        (control.db.x       ? reg_x     : '0) |
-        (control.db.y       ? reg_y     : '0) |
-        (control.db.inc_x   ? inc_x     : '0) |
-        (control.db.inc_y   ? inc_y     : '0) |
-        (control.db.dec_x   ? dec_x     : '0) |
-        (control.db.dec_y   ? dec_y     : '0);
+        ((control.db.x | control.db.inc_x | control.db.dec_x) ? count_x : '0) |
+        ((control.db.y | control.db.inc_y | control.db.dec_y) ? count_y : '0);
 
     // P register
     wire logic flag_b = 1'b1; // TODO: set this from a control bit.
