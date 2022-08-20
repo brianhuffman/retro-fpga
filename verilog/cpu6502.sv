@@ -870,7 +870,7 @@ module cpu6502_shift
 
     always_comb begin
         if (inc_dec) begin
-            data_out = op[0] ? (data_in + 1'b1) : (data_in - 1'b1);
+            data_out = data_in + (op[0] ? 8'h01 : 8'hff);
             c_out = 1'b0;
         end else begin
             if (right)
