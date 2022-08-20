@@ -50,7 +50,6 @@ module cpu6502
     var state        reg_state;
     var logic [15:0] reg_addr;
     var logic [8:0]  reg_index; // result of address index calculation, with carry
-    var logic [7:0]  reg_fixpage; // high byte of address index calculation
     var logic [9:0]  reg_branch; // result of branch target calculation, with carry
     var logic [7:0]  reg_data_in; // registered input
     // TODO: registered input for irq, nmi, set_overflow
@@ -211,6 +210,7 @@ module cpu6502
         struct packed {
             logic xy;        // index with x or y register
             logic y;         // index with y register
+            logic carry;     // add carry bit from previous cycle
         } index;
         struct packed {
             logic inc;       // increment stack pointer
@@ -461,6 +461,7 @@ module cpu6502
             // state "fixpage" only if address calculation carried
             // or if the instruction was indexed write or modify
             control.addr.abs = 1;
+            control.index.carry = 1;
 
             if (reg_opcode[4]) begin
                 // indexed
@@ -735,8 +736,7 @@ module cpu6502
     wire logic [7:0] index = control.index.y ? reg_y : reg_x;
     wire logic [7:0] offset = control.index.xy ? index : 8'h00;
     // 9-bit value includes carry bit
-    wire logic [8:0] next_index = data_in + offset;
-    wire logic [7:0] next_fixpage = data_in + 8'(reg_index[8]);
+    wire logic [8:0] next_index = data_in + (control.index.carry ? 8'(reg_index[8]) : offset);
 
     // Bus address
     wire logic [15:0] address_out =
@@ -748,7 +748,7 @@ module cpu6502
         (control.addr.fffe  ? 16'hfffe                               : '0) |
         (control.addr.hold  ? reg_addr                               : '0) |
         (control.addr.inc   ? {reg_addr[15:8], reg_addr[7:0] + 8'h1} : '0) |
-        (control.addr.carry ? {reg_fixpage, reg_addr[7:0]}           : '0);
+        (control.addr.carry ? {reg_index[7:0], reg_addr[7:0]}        : '0);
 
     // Data out
     wire logic [7:0] data_out =
@@ -787,7 +787,6 @@ module cpu6502
             reg_state  <= next_state;
             reg_addr   <= address_out;
             reg_index  <= next_index;
-            reg_fixpage <= next_fixpage;
             reg_branch <= branch_result;
 
             // after we've done a write, data_in should reflect the
