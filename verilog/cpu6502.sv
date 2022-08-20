@@ -220,17 +220,18 @@ module cpu6502
             logic data;      // send RMW input from data_in
         } rmw;
         struct packed {
+            logic x;         // send counter input from X register
+            logic y;         // send counter input from Y register
+            logic inc;       // increment counter
+            logic dec;       // decrement counter
+        } count;
+        struct packed {
             logic data_in;   // set DB from data_in
             logic rmw;       // set DB from RMW unit
             logic alu;       // set DB from ALU unit
             logic a;         // set DB from A register
-            logic x;         // set DB from X register
-            logic y;         // set DB from Y register
             logic s;         // set DB from S register
-            logic inc_x;     // set DB from X register + 1
-            logic inc_y;     // set DB from Y register + 1
-            logic dec_x;     // set DB from X register - 1
-            logic dec_y;     // set DB from Y register - 1
+            logic count;     // set DB from counter unit
         } db;
         struct packed {
             logic di7;       // set N flag from bit 7 of data_in
@@ -280,17 +281,16 @@ module cpu6502
             control.pc.increment = 1;
 
             // Set flags and registers based on previous instruction
+            control.count.x = opcode_txa | opcode_inx | opcode_dex;
+            control.count.y = opcode_tya | opcode_iny | opcode_dey;
+            control.count.inc = opcode_inx | opcode_iny;
+            control.count.dec = opcode_dex | opcode_dey;
             control.db.data_in = (opcode_load & ~opcode_1_byte) | opcode_pla;
             control.db.a = opcode_tax_tay;
-            control.db.x = opcode_txa;
-            control.db.y = opcode_tya;
             control.db.s = opcode_tsx;
-            control.db.inc_x = opcode_inx;
-            control.db.inc_y = opcode_iny;
-            control.db.dec_x = opcode_dex;
-            control.db.dec_y = opcode_dey;
             control.db.alu = opcode_arith | opcode_bit;
             control.db.rmw = opcode_acc;
+            control.db.count = opcode_txa | opcode_inx | opcode_dex | opcode_tya | opcode_iny | opcode_dey;
 
             control.n.di7 = opcode_plp | opcode_bit;
             control.v.di6 = opcode_plp | opcode_bit;
@@ -651,18 +651,19 @@ module cpu6502
           .c_out(rmw_c_out),
           .data_out(rmw_out) );
 
+    // Counter unit (increment/decrement)
+    wire logic [7:0] count_in =
+        control.count.x ? reg_x : control.count.y ? reg_y : data_in;
+    wire logic [7:0] count_out =
+        count_in + {8{control.count.dec}} + 8'(control.count.inc);
+
     // Internal Data Bus
-    wire logic [7:0] count_x =
-        reg_x + {8{control.db.dec_x}} + 8'(control.db.inc_x);
-    wire logic [7:0] count_y =
-        reg_y + {8{control.db.dec_y}} + 8'(control.db.inc_y);
     wire logic [7:0] db =
         (control.db.data_in ? data_in   : '0) |
         (control.db.rmw     ? rmw_out   : '0) |
         (control.db.alu     ? alu_out   : '0) |
         (control.db.a       ? reg_a     : '0) |
-        ((control.db.x | control.db.inc_x | control.db.dec_x) ? count_x : '0) |
-        ((control.db.y | control.db.inc_y | control.db.dec_y) ? count_y : '0);
+        (control.db.count   ? count_out : '0);
 
     // P register
     wire logic flag_b = 1'b1; // TODO: set this from a control bit.
