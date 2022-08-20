@@ -521,6 +521,11 @@ module cpu6502
             control.rmw.data = 1;
             control.write.enable = 1;
             control.write.same = 1;
+
+            control.db.rmw = 1;
+            control.n.db7 = 1;
+            control.z.dbz = 1;
+            control.c.rmw = opcode_shift;
         end
 
         if (reg_state.modify2)
@@ -530,11 +535,6 @@ module cpu6502
             control.rmw.data = 1; // FIXME: We should write RMW output computed in the previous cycle
             control.write.enable = 1;
             control.write.rmw = 1;
-
-            control.db.rmw = 1;
-            control.n.db7 = 1;
-            control.z.dbz = 1;
-            control.c.rmw = opcode_shift;
         end
 
         if (reg_state.branch1)
