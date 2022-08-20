@@ -168,26 +168,6 @@ module cpu6502
           .v_out(alu_v_out),
           .result(alu_out) );
 
-    // Accumulator shift unit
-    wire logic [7:0] shift_out;
-    wire logic shift_c_out;
-    cpu6502_shift shift
-        ( .data_in(reg_a),
-          .c_in(flag_c),
-          .op(reg_opcode[7:5]),
-          .c_out(shift_c_out),
-          .data_out(shift_out) );
-
-    // RMW unit
-    wire logic [7:0] rmw_out;
-    wire logic rmw_c_out;
-    cpu6502_shift rmw
-        ( .data_in(data_in),
-          .c_in(flag_c),
-          .op(reg_opcode[7:5]),
-          .c_out(rmw_c_out),
-          .data_out(rmw_out) );
-
     // Value stored by ST* instruction
     var logic [7:0] store_out;
     always_comb begin
@@ -237,10 +217,12 @@ module cpu6502
             logic dec;       // decrement stack pointer
         } stack;
         struct packed {
+            logic data;      // send RMW input from data_in
+        } rmw;
+        struct packed {
             logic data_in;   // set DB from data_in
             logic rmw;       // set DB from RMW unit
             logic alu;       // set DB from ALU unit
-            logic shift;     // set DB from accumulator RMW unit
             logic a;         // set DB from A register
             logic x;         // set DB from X register
             logic y;         // set DB from Y register
@@ -276,7 +258,6 @@ module cpu6502
             logic ir5;       // set C flag from bit 5 of Instruction Register
             logic alu;       // set C flag from ALU carry out
             logic rmw;       // set C flag from RMW carry out
-            logic shift;     // set C flag from accumulator RMW carry out
         } c;
         logic a;             // set A register from DB
         logic x;             // set X register from DB
@@ -309,7 +290,7 @@ module cpu6502
             control.db.dec_x = opcode_dex;
             control.db.dec_y = opcode_dey;
             control.db.alu = opcode_arith | opcode_bit;
-            control.db.shift = opcode_acc;
+            control.db.rmw = opcode_acc;
 
             control.n.di7 = opcode_plp | opcode_bit;
             control.v.di6 = opcode_plp | opcode_bit;
@@ -325,7 +306,7 @@ module cpu6502
 
             control.v.alu = opcode_adc_sbc;
             control.c.alu = opcode_adc_sbc;
-            control.c.shift = opcode_acc;
+            control.c.rmw = opcode_acc;
 
             control.n.db7 = opcode_update_nz;
             control.z.dbz = opcode_update_nz | opcode_bit;
@@ -537,6 +518,7 @@ module cpu6502
         begin
             next_state.modify2 = 1;
             control.addr.hold = 1;
+            control.rmw.data = 1;
             control.write.enable = 1;
             control.write.same = 1;
         end
@@ -545,6 +527,7 @@ module cpu6502
         begin
             next_state.byte1 = 1;
             control.addr.hold = 1;
+            control.rmw.data = 1; // FIXME: We should write RMW output computed in the previous cycle
             control.write.enable = 1;
             control.write.rmw = 1;
 
@@ -657,6 +640,17 @@ module cpu6502
         end
     end
 
+    // RMW unit
+    wire logic [7:0] rmw_data_in = control.rmw.data ? data_in : reg_a;
+    wire logic [7:0] rmw_out;
+    wire logic rmw_c_out;
+    cpu6502_shift rmw
+        ( .data_in(rmw_data_in),
+          .c_in(flag_c),
+          .op(reg_opcode[7:5]),
+          .c_out(rmw_c_out),
+          .data_out(rmw_out) );
+
     // Internal Data Bus
     wire logic [7:0] count_x =
         reg_x + {8{control.db.dec_x}} + 8'(control.db.inc_x);
@@ -666,7 +660,6 @@ module cpu6502
         (control.db.data_in ? data_in   : '0) |
         (control.db.rmw     ? rmw_out   : '0) |
         (control.db.alu     ? alu_out   : '0) |
-        (control.db.shift   ? shift_out : '0) |
         (control.db.a       ? reg_a     : '0) |
         ((control.db.x | control.db.inc_x | control.db.dec_x) ? count_x : '0) |
         ((control.db.y | control.db.inc_y | control.db.dec_y) ? count_y : '0);
@@ -713,7 +706,6 @@ module cpu6502
         control.c.ir5 ? reg_opcode[5] :
         control.c.alu ? alu_c_out :
         control.c.rmw ? rmw_c_out :
-        control.c.shift ? shift_c_out :
         flag_c;
 
     // Accumulator register
