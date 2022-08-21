@@ -305,7 +305,7 @@ module cpu6502
             control.c.ir5 = opcode_clc_sec;
 
             control.v.alu = opcode_adc_sbc;
-            control.c.alu = opcode_adc_sbc;
+            control.c.alu = opcode_adc_sbc | opcode_cmp;
             control.c.rmw = opcode_acc;
 
             control.n.db7 = opcode_update_nz;
