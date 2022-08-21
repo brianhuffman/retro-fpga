@@ -828,12 +828,14 @@ module cpu6502_alu
 
     // CMP and SBC do subtraction
     wire logic sub = op[2];
+    // CMP always uses C=1
+    wire logic carry = c_in | ~op[0];
 
     // complement 2nd operand if subtracting
     wire logic [7:0] addend = sub ? ~b_in : b_in;
 
     // binary mode adder
-    wire logic [8:0] bin_add = a_in + addend + 8'(c_in);
+    wire logic [8:0] bin_add = a_in + addend + 8'(carry);
     wire logic [7:0] add_result = bin_add[7:0]; // TODO: decimal mode
 
     always_comb begin
