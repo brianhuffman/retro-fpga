@@ -846,7 +846,7 @@ module cpu6502_alu
             3'h3: result = add_result;  // ADC
             3'h4: result = 8'h0;        // STA
             3'h5: result = b_in;        // LDA
-            3'h6: result = a_in;        // CMP
+            3'h6: result = add_result;  // CMP
             3'h7: result = add_result;  // SBC
         endcase // case (op)
     end
