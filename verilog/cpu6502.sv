@@ -115,6 +115,7 @@ module cpu6502
     wire logic opcode_tya          = reg_opcode == 8'h98;
     wire logic opcode_clv          = reg_opcode == 8'hB8;
     wire logic opcode_jmp_abs      = reg_opcode == 8'h4C;
+    wire logic opcode_jmp_ind      = reg_opcode == 8'h6C;
     wire logic opcode_cld_sed      = reg_opcode ==? 8'b11?_110_00; // CLD/SED
     wire logic opcode_cli_sei      = reg_opcode ==? 8'b01?_110_00; // CLI/SEI
     wire logic opcode_clc_sec      = reg_opcode ==? 8'b00?_110_00; // CLC/SEC
@@ -466,7 +467,11 @@ module cpu6502
             control.addr.abs = 1;
             control.index.carry = 1;
 
-            if (reg_opcode[4]) begin
+            if (opcode_jmp_ind) begin
+                control.index.inc = 1;
+                next_state.stack5 = 1;
+            end
+            else if (reg_opcode[4]) begin
                 // indexed
                 // Read instructions go to state 'fixpage' iff address carried
                 if (opcode_store | opcode_modify | reg_index[8])
