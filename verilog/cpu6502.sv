@@ -211,6 +211,7 @@ module cpu6502
             logic xy;        // index with x or y register
             logic y;         // index with y register
             logic carry;     // add carry bit from previous cycle
+            logic inc;       // compute previous ADL + 1
         } index;
         struct packed {
             logic inc;       // increment stack pointer
@@ -378,6 +379,7 @@ module cpu6502
             begin
                 // 8'b???_100_?1
                 // 11, 13
+                control.index.inc = 1;
                 next_state.indirect = 1;
             end
         end
@@ -394,6 +396,7 @@ module cpu6502
             // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
             // 17  slo rla sre rra sax lax dcp isb  $00,X
             control.addr.zp2 = 1;
+            control.index.inc = opcode_indirect_x;
             next_state.indirect = opcode_indirect_x; // xxx_000_x1 (01,03)
             next_state.byte1 = ~opcode_indirect_x;    // xxx_101_xx (14,15,16,17)
         end
@@ -733,10 +736,12 @@ module cpu6502
         reg_s + {8{control.stack.dec}} + 8'(control.stack.inc);
 
     // Indexing calculations
-    wire logic [7:0] index = control.index.y ? reg_y : reg_x;
-    wire logic [7:0] offset = control.index.xy ? index : 8'h00;
+    wire logic index_increment = control.index.inc | (control.index.carry & reg_index[8]);
+    wire logic [7:0] index_base = control.index.inc ? reg_addr[7:0] : data_in;
+    wire logic [7:0] index_counter = control.index.y ? reg_y : reg_x;
+    wire logic [7:0] index_offset = control.index.xy ? index_counter : 8'(index_increment);
     // 9-bit value includes carry bit
-    wire logic [8:0] next_index = data_in + (control.index.carry ? 8'(reg_index[8]) : offset);
+    wire logic [8:0] next_index = index_base + index_offset;
 
     // Bus address
     wire logic [15:0] address_out =
@@ -747,7 +752,7 @@ module cpu6502
         (control.addr.abs   ? {data_in, reg_index[7:0]}              : '0) |
         (control.addr.fffe  ? 16'hfffe                               : '0) |
         (control.addr.hold  ? reg_addr                               : '0) |
-        (control.addr.inc   ? {reg_addr[15:8], reg_addr[7:0] + 8'h1} : '0) |
+        (control.addr.inc   ? {reg_addr[15:8], reg_index[7:0]}       : '0) |
         (control.addr.carry ? {reg_index[7:0], reg_addr[7:0]}        : '0);
 
     // Data out
