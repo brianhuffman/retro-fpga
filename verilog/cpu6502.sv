@@ -188,16 +188,22 @@ module cpu6502
             logic vector;    // set pc from last two bytes read
         } pc;
         struct packed {
-            logic pc;        // ADH = PCH, ADL = PCL
-            logic stack;     // ADH = 01, ADL = S
-            logic zp1;       // ADH = 00, ADL = data_in
-            logic zp2;       // ADH = 00, ADL = indexed
-            logic abs;       // ADH = data_in, ADL = indexed
-            logic fffe;      // address = $fffe
-            logic hold;      // keep address unchanged
-            logic inc;       // ADH unchanged, increment ADL
-            logic carry;     // ADH += indexing carry, ADL unchanged
-        } addr;
+            logic pch;       // ADH = PCH
+            logic stack;     // ADH = 01
+            logic zero;      // ADH = 00
+            logic data;      // ADH = data_in
+            logic index;     // ADH = result of index calculation
+            logic vector;    // ADH = $FF
+            logic hold;      // keep ADH unchanged
+        } adh;
+        struct packed {
+            logic pcl;       // ADL = PCL
+            logic stack;     // ADL = S
+            logic data;      // ADL = data_in
+            logic index;     // ADL = result of index calculation
+            logic vector;    // ADL = $FE
+            logic hold;      // keep ADL unchanged
+        } adl;
         struct packed {
             logic enable;    // 0 = read, 1 = write
             logic same;      // copy data_out from data_in
@@ -279,7 +285,8 @@ module cpu6502
         begin
             // Requesting opcode byte
             next_state.byte2 = 1;
-            control.addr.pc = 1;
+            control.adh.pch = 1;
+            control.adl.pcl = 1;
             control.pc.increment = 1;
 
             // Set flags and registers based on previous instruction
@@ -322,7 +329,8 @@ module cpu6502
         begin
             // Requesting byte after opcode byte
             // Opcode available on data_in and reg_opcode
-            control.addr.pc = 1;
+            control.adh.pch = 1;
+            control.adl.pcl = 1;
             control.pc.increment = ~opcode_1_byte;
 
             next_state.zeropage1 = opcode_zeropage_any | opcode_indirect_any;
@@ -351,7 +359,8 @@ module cpu6502
             // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
             // 17  slo rla sre rra sax lax dcp isb  $00,X
 
-            control.addr.zp1 = 1;
+            control.adh.zero = 1;
+            control.adl.data = 1;
 
             if (opcode_indirect_x)
             begin
@@ -396,7 +405,8 @@ module cpu6502
             // 15  ORA AND EOR ADC STA LDA CMP SBC  $00,X
             // 16  ASL ROL LSR ROR STX LDX DEC INC  $00,X
             // 17  slo rla sre rra sax lax dcp isb  $00,X
-            control.addr.zp2 = 1;
+            control.adh.zero = 1;
+            control.adl.index = 1;
             control.index.inc = opcode_indirect_x;
             next_state.indirect = opcode_indirect_x; // xxx_000_x1 (01,03)
             next_state.byte1 = ~opcode_indirect_x;    // xxx_101_xx (14,15,16,17)
@@ -418,7 +428,8 @@ module cpu6502
             // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X  1101
             // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X  1110 (Y for shx/LDX)
             // 1f  slo rla sre rra sha lax dcp isb  $0000,X  1111 (Y for sha/lax)
-            control.addr.pc = 1;
+            control.adh.pch = 1;
+            control.adl.pcl = 1;
             control.pc.increment = 1;
             if (opcode_jmp_abs) begin
                 next_state.byte1 = 1;
@@ -464,7 +475,8 @@ module cpu6502
             // 1f  slo rla sre rra sha lax dcp isb  $0000,X (rmw)
             // state "fixpage" only if address calculation carried
             // or if the instruction was indexed write or modify
-            control.addr.abs = 1;
+            control.adh.data = 1;
+            control.adl.index = 1;
             control.index.carry = 1;
 
             if (opcode_jmp_ind) begin
@@ -496,7 +508,8 @@ module cpu6502
             // 03  slo rla sre rra sax lax dcp isb  ($00,X)
             // 11  ORA AND EOR ADC STA LDA CMP SBC  ($00),Y
             // 13  slo rla sre rra sha lax dcp isb  ($00),Y
-            control.addr.inc = 1;
+            control.adh.hold = 1;
+            control.adl.index = 1;
             next_state.absolute = 1;
             if (reg_opcode[4]) begin
                 // ($00),Y (11,13)
@@ -518,7 +531,8 @@ module cpu6502
             // 1d  ORA AND EOR ADC STA LDA CMP SBC  $0000,X
             // 1e  ASL ROL LSR ROR shx LDX DEC INC  $0000,X
             // 1f  slo rla sre rra sha lax dcp isb  $0000,X
-            control.addr.carry = 1;
+            control.adh.index = 1;
+            control.adl.hold = 1;
             if (opcode_modify) next_state.modify1 = 1;
             else next_state.byte1 = 1;
         end
@@ -526,7 +540,8 @@ module cpu6502
         if (reg_state.modify1)
         begin
             next_state.modify2 = 1;
-            control.addr.hold = 1;
+            control.adh.hold = 1;
+            control.adl.hold = 1;
             control.rmw.data = 1;
             control.write.enable = 1;
             control.write.same = 1;
@@ -540,7 +555,8 @@ module cpu6502
         if (reg_state.modify2)
         begin
             next_state.byte1 = 1;
-            control.addr.hold = 1;
+            control.adh.hold = 1;
+            control.adl.hold = 1;
             control.rmw.data = 1; // FIXME: We should write RMW output computed in the previous cycle
             control.write.enable = 1;
             control.write.rmw = 1;
@@ -552,7 +568,8 @@ module cpu6502
             // xxx_100_00 (10)
             // 10  BPL BMI BVC BVS BCC BCS BNE BEQ
             // 12   -   -   -   -   -   -   -   -
-            control.addr.pc = 1;
+            control.adh.pch = 1;
+            control.adl.pcl = 1;
             control.pc.branch1 = 1;
             if (branch_result[9:8] == 2'b00)
                 next_state.byte1 = 1;
@@ -563,7 +580,8 @@ module cpu6502
         if (reg_state.branch2)
         begin
             // Fixup high byte of PC for branch
-            control.addr.pc = 1;
+            control.adh.pch = 1;
+            control.adl.pcl = 1;
             control.pc.branch2 = 1;
             next_state.byte1 = 1;
         end
@@ -574,7 +592,8 @@ module cpu6502
             // 08 PHP  28 PLP  48 PHA  68 PLA
             next_state.byte1 = opcode_php_pha;
             next_state.stack2 = ~opcode_php_pha;
-            control.addr.stack = 1;
+            control.adh.stack = 1;
+            control.adl.stack = 1;
             control.stack.inc = opcode_rti_rts | opcode_plp_pla;
             control.stack.dec = opcode_brk | opcode_php_pha;
             control.write.enable = opcode_brk | opcode_php_pha;
@@ -590,7 +609,8 @@ module cpu6502
             //         28 PLP          68 PLA
             next_state.byte1 = opcode_plp_pla;
             next_state.stack3 = ~opcode_plp_pla;
-            control.addr.stack = 1;
+            control.adh.stack = 1;
+            control.adl.stack = 1;
             control.stack.inc = opcode_rti_rts;
             control.stack.dec = opcode_brk_jsr;
             // TODO: specify what values are read
@@ -606,7 +626,8 @@ module cpu6502
         begin
             // 00 BRK  20 JSR  40 RTI  60 RTS
             next_state.stack4 = 1;
-            control.addr.stack = 1;
+            control.adh.stack = 1;
+            control.adl.stack = 1;
             control.stack.inc = opcode_rti;
             control.stack.dec = opcode_brk_jsr;
             control.pc.vector = opcode_rts;
@@ -626,8 +647,10 @@ module cpu6502
             // 00 BRK  20 JSR  40 RTI  60 RTS
             next_state.byte1 = opcode_rti_rts | opcode_jsr;
             next_state.stack5 = opcode_brk;
-            control.addr.stack = opcode_rti_rts | opcode_jsr;
-            control.addr.fffe = opcode_brk;
+            control.adh.stack = opcode_rti_rts | opcode_jsr;
+            control.adl.stack = opcode_rti_rts | opcode_jsr;
+            control.adh.vector = opcode_brk;
+            control.adl.vector = opcode_brk;
             control.pc.vector = opcode_rti;
         end
 
@@ -635,7 +658,8 @@ module cpu6502
         begin
             // 00 BRK
             next_state.byte1 = 1;
-            control.addr.inc = 1;
+            control.adh.hold = 1;
+            control.adl.index = 1;
             control.pc.vector = 1;
         end
 
@@ -741,20 +765,26 @@ module cpu6502
         reg_s + {8{control.stack.dec}} + 8'(control.stack.inc);
 
     // Bus address
-    wire logic [15:0] address_out =
-        (control.addr.pc    ? reg_pc                                 : '0) |
-        (control.addr.stack ? {8'h01, reg_s}                         : '0) |
-        (control.addr.zp1   ? {8'h00, data_in}                       : '0) |
-        (control.addr.zp2   ? {8'h00, reg_index[7:0]}                : '0) |
-        (control.addr.abs   ? {data_in, reg_index[7:0]}              : '0) |
-        (control.addr.fffe  ? 16'hfffe                               : '0) |
-        (control.addr.hold  ? reg_addr                               : '0) |
-        (control.addr.inc   ? {reg_addr[15:8], reg_index[7:0]}       : '0) |
-        (control.addr.carry ? {reg_index[7:0], reg_addr[7:0]}        : '0);
+    wire logic [7:0] adh_out =
+        (control.adh.pch    ? reg_pc[15:8]   : '0) |
+        (control.adh.stack  ? 8'h01          : '0) |
+        (control.adh.zero   ? 8'h00          : '0) |
+        (control.adh.data   ? data_in        : '0) |
+        (control.adh.index  ? reg_index[7:0] : '0) |
+        (control.adh.vector ? 8'hff          : '0) |
+        (control.adh.hold   ? reg_addr[15:8] : '0);
+    wire logic [7:0] adl_out =
+        (control.adl.pcl    ? reg_pc[7:0]    : '0) |
+        (control.adl.stack  ? reg_s          : '0) |
+        (control.adl.data   ? data_in        : '0) |
+        (control.adl.index  ? reg_index[7:0] : '0) |
+        (control.adl.vector ? 8'hfe          : '0) |
+        (control.adl.hold   ? reg_addr[7:0]  : '0);
+    wire logic [15:0] address_out = {adh_out, adl_out};
 
     // Indexing calculations
     wire logic index_increment = control.index.inc | (control.index.carry & reg_index[8]);
-    wire logic [7:0] index_base = control.index.inc ? address_out[7:0] : data_in;
+    wire logic [7:0] index_base = control.index.inc ? adl_out : data_in;
     wire logic [7:0] index_counter = control.index.y ? reg_y : reg_x;
     wire logic [7:0] index_offset = control.index.xy ? index_counter : 8'(index_increment);
     // 9-bit value includes carry bit
