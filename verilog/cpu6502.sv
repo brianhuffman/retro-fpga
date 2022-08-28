@@ -740,14 +740,6 @@ module cpu6502
     wire logic [7:0] next_s =
         reg_s + {8{control.stack.dec}} + 8'(control.stack.inc);
 
-    // Indexing calculations
-    wire logic index_increment = control.index.inc | (control.index.carry & reg_index[8]);
-    wire logic [7:0] index_base = control.index.inc ? reg_addr[7:0] : data_in;
-    wire logic [7:0] index_counter = control.index.y ? reg_y : reg_x;
-    wire logic [7:0] index_offset = control.index.xy ? index_counter : 8'(index_increment);
-    // 9-bit value includes carry bit
-    wire logic [8:0] next_index = index_base + index_offset;
-
     // Bus address
     wire logic [15:0] address_out =
         (control.addr.pc    ? reg_pc                                 : '0) |
@@ -759,6 +751,14 @@ module cpu6502
         (control.addr.hold  ? reg_addr                               : '0) |
         (control.addr.inc   ? {reg_addr[15:8], reg_index[7:0]}       : '0) |
         (control.addr.carry ? {reg_index[7:0], reg_addr[7:0]}        : '0);
+
+    // Indexing calculations
+    wire logic index_increment = control.index.inc | (control.index.carry & reg_index[8]);
+    wire logic [7:0] index_base = control.index.inc ? address_out[7:0] : data_in;
+    wire logic [7:0] index_counter = control.index.y ? reg_y : reg_x;
+    wire logic [7:0] index_offset = control.index.xy ? index_counter : 8'(index_increment);
+    // 9-bit value includes carry bit
+    wire logic [8:0] next_index = index_base + index_offset;
 
     // Data out
     wire logic [7:0] data_out =
