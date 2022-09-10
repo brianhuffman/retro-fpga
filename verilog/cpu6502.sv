@@ -409,7 +409,8 @@ module cpu6502
             control.adl.index = 1;
             control.index.inc = opcode_indirect_x;
             next_state.indirect = opcode_indirect_x; // xxx_000_x1 (01,03)
-            next_state.byte1 = ~opcode_indirect_x;    // xxx_101_xx (14,15,16,17)
+            next_state.modify1 = ~opcode_indirect_x & opcode_modify;
+            next_state.byte1 = ~opcode_indirect_x & ~opcode_modify;
         end
 
         if (reg_state.byte3)
