@@ -656,6 +656,7 @@ module cpu6502
             control.adl.vector = opcode_brk;
             control.pc.vector = opcode_rti;
             control.pc.increment = opcode_rts;
+            control.index.inc = opcode_brk;
         end
 
         if (reg_state.stack5)
