@@ -648,10 +648,10 @@ module cpu6502
             // 00 BRK  20 JSR  40 RTI  60 RTS
             next_state.byte1 = opcode_rti_rts | opcode_jsr;
             next_state.stack5 = opcode_brk;
-            control.adh.stack = opcode_rti | opcode_jsr;
-            control.adl.stack = opcode_rti | opcode_jsr;
-            control.adh.pch = opcode_rts;
-            control.adl.pcl = opcode_rts;
+            control.adh.stack = opcode_rti;
+            control.adl.stack = opcode_rti;
+            control.adh.pch = opcode_rts | opcode_jsr;
+            control.adl.pcl = opcode_rts | opcode_jsr;
             control.adh.vector = opcode_brk;
             control.adl.vector = opcode_brk;
             control.pc.vector = opcode_rti;
