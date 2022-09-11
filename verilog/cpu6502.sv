@@ -701,6 +701,7 @@ module cpu6502
         (control.db.rmw     ? rmw_out   : '0) |
         (control.db.alu     ? alu_out   : '0) |
         (control.db.a       ? reg_a     : '0) |
+        (control.db.s       ? reg_s     : '0) |
         (control.db.count   ? count_out : '0);
 
     // P register
