@@ -247,7 +247,7 @@ module cpu6502
         } n;
         struct packed {
             logic di6;       // set V flag from bit 6 of data_in
-            logic ir5;       // set V flag from bit 5 of Instruction Register
+            logic clv;       // set V flag to 0
             logic alu;       // set V flag from ALU unit
         } v;
         struct packed {
@@ -308,7 +308,7 @@ module cpu6502
             control.z.di1 = opcode_plp;
             control.c.di0 = opcode_plp;
 
-            control.v.ir5 = opcode_clv;
+            control.v.clv = opcode_clv;
             control.d.ir5 = opcode_cld_sed;
             control.i.ir5 = opcode_cli_sei;
             control.c.ir5 = opcode_clc_sec;
@@ -717,7 +717,7 @@ module cpu6502
     // V Flag
     wire logic next_v =
         control.v.di6 ? data_in[6] :
-        control.v.ir5 ? reg_opcode[5] :
+        control.v.clv ? 1'b0 :
         control.v.alu ? alu_v_out :
         flag_v;
 
