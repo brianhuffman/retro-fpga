@@ -107,6 +107,7 @@ module cpu6502
     wire logic opcode_pla          = reg_opcode == 8'h68;
     wire logic opcode_tax          = reg_opcode == 8'hAA;
     wire logic opcode_tay          = reg_opcode == 8'hA8;
+    wire logic opcode_txs          = reg_opcode == 8'h9A;
     wire logic opcode_tsx          = reg_opcode == 8'hBA;
     wire logic opcode_dex          = reg_opcode == 8'hCA;
     wire logic opcode_inx          = reg_opcode == 8'hE8;
@@ -221,6 +222,7 @@ module cpu6502
             logic inc;       // compute previous ADL + 1
         } index;
         struct packed {
+            logic txs;       // set stack pointer from X register
             logic inc;       // increment stack pointer
             logic dec;       // decrement stack pointer
         } stack;
@@ -300,6 +302,7 @@ module cpu6502
             control.db.alu = opcode_arith | opcode_bit;
             control.db.rmw = opcode_acc;
             control.db.count = opcode_txa | opcode_inx | opcode_dex | opcode_tya | opcode_iny | opcode_dey;
+            control.stack.txs = opcode_txs;
 
             control.n.di7 = opcode_plp | opcode_bit;
             control.v.di6 = opcode_plp | opcode_bit;
@@ -768,6 +771,7 @@ module cpu6502
 
     // Stack register
     wire logic [7:0] next_s =
+        control.stack.txs ? reg_x :
         reg_s + {8{control.stack.dec}} + 8'(control.stack.inc);
 
     // Bus address
