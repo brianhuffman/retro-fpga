@@ -167,8 +167,8 @@ module cpu6502
           .b_in(reg_opcode[7] ? ~data_in : data_in),
           // CMP always uses C=1
           .c_in(flag_c | opcode_cmp),
-          // Only ADC/SBC use decimal mode
-          .d_in(flag_d & opcode_adc_sbc),
+          // Only ADC uses decimal mode
+          .d_in(flag_d & opcode_adc),
           // CMP sets addition opcode
           .op(opcode_cmp ? 2'b11 : reg_opcode[6:5]),
           .hc_out(alu_hc_out),
