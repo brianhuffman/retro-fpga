@@ -89,6 +89,8 @@ module cpu6502
     wire logic opcode_ldy_tay      = reg_opcode ==? 8'b101_0?0_00; // LDY #$00 / TAY
     wire logic opcode_lda_sbc      = reg_opcode ==? 8'b1?1_???_?1; // LDA/SBC/lax/isb
     wire logic opcode_adc_sbc      = reg_opcode ==? 8'b?11_???_?1; // ADC/SBC/rra/isb
+    wire logic opcode_adc          = reg_opcode ==? 8'b011_???_?1; // ADC/rra
+    wire logic opcode_sbc          = reg_opcode ==? 8'b111_???_?1; // SBC/isb
     wire logic opcode_bit          = reg_opcode ==? 8'b001_0?1_00; // BIT $00 or BIT $0000
     wire logic opcode_tax_tay      = reg_opcode ==? 8'b101_010_?0; // TAX/TAY
     wire logic opcode_txa          = reg_opcode ==? 8'b100_010_1?; // TXA/ane
@@ -157,14 +159,19 @@ module cpu6502
 
     // ALU
     wire logic [7:0] alu_out;
-    wire logic alu_c_out, alu_v_out;
+    wire logic alu_hc_out, alu_c_out, alu_v_out;
     // operands come from accumulator and data bus
     cpu6502_alu alu
         ( .a_in(reg_a),
-          .b_in(data_in),
-          .c_in(flag_c),
-          .d_in(flag_d),
-          .op(reg_opcode[7:5]),
+          // complement 2nd operand if subtracting
+          .b_in(reg_opcode[7] ? ~data_in : data_in),
+          // CMP always uses C=1
+          .c_in(flag_c | opcode_cmp),
+          // Only ADC/SBC use decimal mode
+          .d_in(flag_d & opcode_adc_sbc),
+          // CMP sets addition opcode
+          .op(opcode_cmp ? 2'b11 : reg_opcode[6:5]),
+          .hc_out(alu_hc_out),
           .c_out(alu_c_out),
           .v_out(alu_v_out),
           .result(alu_out) );
@@ -751,8 +758,19 @@ module cpu6502
         control.c.rmw ? rmw_c_out :
         flag_c;
 
+    // Decimal adjust adder
+    wire logic [3:0] adjustment_lo =
+        (flag_d & opcode_sbc & ~alu_hc_out ? 8'ha : 8'h0) |
+        (flag_d & opcode_adc & alu_hc_out ? 8'h6 : 8'h0);
+    wire logic [3:0] adjustment_hi =
+        (flag_d & opcode_sbc & ~alu_c_out ? 8'ha : 8'h0) |
+        (flag_d & opcode_adc & alu_c_out ? 8'h6 : 8'h0);
+    wire logic [3:0] adjusted_lo = db[3:0] + adjustment_lo;
+    wire logic [3:0] adjusted_hi = db[7:4] + adjustment_hi;
+    wire logic [7:0] adjusted = {adjusted_hi, adjusted_lo};
+
     // Accumulator register
-    wire logic [7:0] next_a = control.a ? db : reg_a;
+    wire logic [7:0] next_a = control.a ? adjusted : reg_a;
 
     // X index register
     wire logic [7:0] next_x = control.x ? db : reg_x;
@@ -864,45 +882,48 @@ module cpu6502
 
 endmodule: cpu6502
 
+module cpu6502_nibble_adder
+    ( input logic [3:0] a_in,
+      input logic [3:0] b_in,
+      input logic c_in,
+      input logic d_in,
+      output logic c_out,
+      output logic [3:0] result
+      );
+
+    wire logic [4:0] sum = a_in + b_in + 4'(c_in);
+    wire logic decimal_carry = sum > 5'h9;
+    assign c_out = d_in ? decimal_carry : sum[4];
+    assign result = sum[3:0];
+
+endmodule: cpu6502_nibble_adder
+
 module cpu6502_alu
     ( input logic [7:0] a_in,
       input logic [7:0] b_in,
       input logic c_in,
       input logic d_in,
-      input logic [2:0] op, // ORA,AND,EOR,ADC,STA,LDA,CMP,SBC
+      input logic [1:0] op, // 00=ORA, 01=AND, 10=EOR, 11=ADC
 
+      output logic hc_out,
       output logic c_out,
       output logic v_out,
       output logic [7:0] result
       );
 
-    // CMP and SBC do subtraction
-    wire logic sub = op[2];
-    // CMP always uses C=1
-    wire logic carry = c_in | ~op[0];
-
-    // complement 2nd operand if subtracting
-    wire logic [7:0] addend = sub ? ~b_in : b_in;
-
-    // binary mode adder
-    wire logic [8:0] bin_add = a_in + addend + 8'(carry);
-    wire logic [7:0] add_result = bin_add[7:0]; // TODO: decimal mode
+    wire logic [7:0] sum;
+    cpu6502_nibble_adder lo (a_in[3:0], b_in[3:0], c_in, d_in, hc_out, sum[3:0]);
+    cpu6502_nibble_adder hi (a_in[7:4], b_in[7:4], hc_out, d_in, c_out, sum[7:4]);
+    assign v_out = (a_in[7] ^ sum[7]) & (b_in[7] ^ result[7]);
 
     always_comb begin
         case (op)
-            3'h0: result = a_in | b_in; // ORA
-            3'h1: result = a_in & b_in; // AND
-            3'h2: result = a_in ^ b_in; // EOR
-            3'h3: result = add_result;  // ADC
-            3'h4: result = 8'h0;        // STA
-            3'h5: result = b_in;        // LDA
-            3'h6: result = add_result;  // CMP
-            3'h7: result = add_result;  // SBC
+            2'b00: result = a_in | b_in; // ORA
+            2'b01: result = a_in & b_in; // AND
+            2'b10: result = a_in ^ b_in; // EOR
+            2'b11: result = sum;         // ADC
         endcase // case (op)
     end
-
-    assign v_out = (a_in[7] ^ result[7]) & (addend[7] ^ result[7]);
-    assign c_out = bin_add[8];
 
 endmodule: cpu6502_alu
 
