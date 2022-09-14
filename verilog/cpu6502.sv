@@ -832,8 +832,8 @@ module cpu6502
     always_ff @(posedge clock) begin
         if (reset) begin
             reg_pc <= 16'hfffc;
-            reg_opcode <= 8'h6c; // JMP ($fffc)
-            reg_state <= '{ byte3: 1, default: 0 };
+            reg_opcode <= 8'h4c; // JMP ($fffc)
+            reg_state <= '{ byte2: 1, default: 0 };
         end
 
         else if (io_enable) begin
