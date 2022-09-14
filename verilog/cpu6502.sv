@@ -125,10 +125,12 @@ module cpu6502
     wire logic opcode_alu4         = reg_opcode ==? 8'b0??_???_?1; // ORA/AND/EOR/ADC
     wire logic opcode_cmp          = reg_opcode ==? 8'b110_???_?1; // CMP
     wire logic opcode_cpxy_inxy    = reg_opcode ==? 8'b11?_0??_00; // CPX/CPY/INX/INY
+    wire logic opcode_inx_iny      = reg_opcode ==? 8'b11?_010_00; // INX/INY
 
     wire logic opcode_3_byte       = opcode_absolute_any | opcode_absolute_y;
     wire logic opcode_arith        = opcode_alu & ~opcode_load_store; // ORA/AND/EOR/ADC/CMP/SBC
     wire logic opcode_modify       = opcode_rmw & ~opcode_load_store; // ASL/ROL/LSR/ROR/DEC/INC
+    wire logic opcode_cpx_cpy      = opcode_cpxy_inxy & ~opcode_inx_iny; // CPX/CPY
     wire logic opcode_imm_any      = opcode_immediate_a | opcode_immediate_xy;
     wire logic opcode_2_cycle      = opcode_imm_any | (opcode_1_byte & ~opcode_stack);
 
@@ -162,15 +164,15 @@ module cpu6502
     wire logic alu_hc_out, alu_c_out, alu_v_out;
     // operands come from accumulator and data bus
     cpu6502_alu alu
-        ( .a_in(reg_a),
+        ( .a_in(opcode_cpx_cpy ? (reg_opcode[5] ? reg_x : reg_y) : reg_a),
           // complement 2nd operand if subtracting
           .b_in(reg_opcode[7] ? ~data_in : data_in),
-          // CMP always uses C=1
-          .c_in(flag_c | opcode_cmp),
+          // CMP/CPX/CPY always uses C=1
+          .c_in(flag_c | opcode_cmp | opcode_cpx_cpy),
           // Only ADC uses decimal mode
           .d_in(flag_d & opcode_adc),
-          // CMP sets addition opcode
-          .op(opcode_cmp ? 2'b11 : reg_opcode[6:5]),
+          // Set op = 11 if subtracting
+          .op(reg_opcode[7] ? 2'b11 : reg_opcode[6:5]),
           .hc_out(alu_hc_out),
           .c_out(alu_c_out),
           .v_out(alu_v_out),
@@ -306,7 +308,7 @@ module cpu6502
             control.db.data_in = (opcode_load & ~opcode_1_byte) | opcode_pla;
             control.db.a = opcode_tax_tay;
             control.db.s = opcode_tsx;
-            control.db.alu = opcode_arith | opcode_bit;
+            control.db.alu = opcode_arith | opcode_bit | opcode_cpx_cpy;
             control.db.rmw = opcode_acc;
             control.db.count = opcode_txa | opcode_inx | opcode_dex | opcode_tya | opcode_iny | opcode_dey;
             control.stack.txs = opcode_txs;
@@ -324,7 +326,7 @@ module cpu6502
             control.c.ir5 = opcode_clc_sec;
 
             control.v.alu = opcode_adc_sbc;
-            control.c.alu = opcode_adc_sbc | opcode_cmp;
+            control.c.alu = opcode_adc_sbc | opcode_cmp | opcode_cpx_cpy;
             control.c.rmw = opcode_acc;
 
             control.n.db7 = opcode_update_nz;
