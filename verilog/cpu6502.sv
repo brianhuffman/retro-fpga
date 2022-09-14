@@ -666,7 +666,7 @@ module cpu6502
             control.adl.pcl = opcode_rts | opcode_jsr;
             control.adh.vector = opcode_brk;
             control.adl.vector = opcode_brk;
-            control.pc.vector = opcode_rti;
+            control.pc.vector = opcode_rti | opcode_jsr;
             control.pc.increment = opcode_rts;
             control.index.inc = opcode_brk;
         end
@@ -859,11 +859,8 @@ module cpu6502
             reg_index  <= next_index;
             reg_branch <= branch_result;
 
-            // after we've done a write, data_in should reflect the
-            // previous data_out.
-            if (control.write.enable) begin
-                reg_data_in <= data_out;
-            end else begin
+            // update reg_data_in if this is a non-dummy read cycle
+            if (~control.write.enable & ~reg_state.stack1) begin
                 reg_data_in <= io_data_in;
             end
         end
