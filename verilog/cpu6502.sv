@@ -52,6 +52,7 @@ module cpu6502
     var logic [8:0]  reg_index; // result of address index calculation, with carry
     var logic [9:0]  reg_branch; // result of branch target calculation, with carry
     var logic [7:0]  reg_data_in; // registered input
+    var logic [7:0]  reg_rmw; // result of previous rmw calculation
     // TODO: registered input for irq, nmi, set_overflow
 
     wire logic [7:0] data_in = reg_data_in;
@@ -823,7 +824,7 @@ module cpu6502
     // Data out
     wire logic [7:0] data_out =
         (control.write.same  ? data_in      : '0) |
-        (control.write.rmw   ? rmw_out      : '0) |
+        (control.write.rmw   ? reg_rmw      : '0) |
         (control.write.store ? store_out    : '0) |
         (control.write.a     ? reg_a        : '0) |
         (control.write.p     ? status_out   : '0) |
@@ -858,6 +859,7 @@ module cpu6502
             reg_addr   <= address_out;
             reg_index  <= next_index;
             reg_branch <= branch_result;
+            reg_rmw    <= rmw_out;
 
             // update reg_data_in if this is a non-dummy read cycle
             if (~control.write.enable & ~reg_state.stack1) begin
