@@ -220,8 +220,7 @@ module cpu6502
             logic same;      // copy data_out from data_in
             logic rmw;       // write data from rmw unit
             logic store;     // write data from store instruction
-            logic a;         // write data from accumulator
-            logic p;         // write data from status register
+            logic push;      // write accumulator or status register
             logic pch;       // write high byte of PC
             logic pcl;       // write low byte of PC
         } write;
@@ -614,8 +613,7 @@ module cpu6502
             control.write.enable = opcode_brk | opcode_php_pha;
             // All stack reads in this cycle are ignored
             control.write.pch = opcode_brk;
-            control.write.p = opcode_php;
-            control.write.a = opcode_pha;
+            control.write.push = opcode_php_pha;
         end
 
         if (reg_state.stack2)
@@ -647,7 +645,7 @@ module cpu6502
             control.stack.dec = opcode_brk_jsr;
             control.pc.vector = opcode_rts;
             control.write.enable = opcode_brk_jsr;
-            control.write.p = opcode_brk;
+            control.write.push = opcode_brk;
             control.write.pcl = opcode_jsr;
             control.n.di7 = opcode_rti;
             control.v.di6 = opcode_rti;
@@ -825,12 +823,12 @@ module cpu6502
     wire logic [8:0] next_index = index_base + index_offset;
 
     // Data out
+    wire logic [7:0] push_data = reg_opcode[6] ? reg_a : status_out;
     wire logic [7:0] data_out =
         (control.write.same  ? data_in      : '0) |
         (control.write.rmw   ? reg_rmw      : '0) |
         (control.write.store ? store_out    : '0) |
-        (control.write.a     ? reg_a        : '0) |
-        (control.write.p     ? status_out   : '0) |
+        (control.write.push  ? push_data    : '0) |
         (control.write.pch   ? reg_pc[15:8] : '0) |
         (control.write.pcl   ? reg_pc[7:0]  : '0);
 
