@@ -267,6 +267,7 @@ module cpu6502
             logic ir5;       // set D flag from bit 5 of Instruction Register
         } d;
         struct packed {
+            logic sei;       // set I flag to 1
             logic di2;       // set I flag from bit 2 of data_in
             logic ir5;       // set I flag from bit 5 of Instruction Register
         } i;
@@ -679,6 +680,7 @@ module cpu6502
             control.adh.hold = 1;
             control.adl.index = 1;
             control.pc.vector = 1;
+            control.i.sei = 1;
         end
 
         if (opcode_store
@@ -743,6 +745,7 @@ module cpu6502
 
     // I Flag
     wire logic next_i =
+        control.i.sei ? 1'b1 :
         control.i.di2 ? data_in[2] :
         control.i.ir5 ? reg_opcode[5] :
         flag_i;
