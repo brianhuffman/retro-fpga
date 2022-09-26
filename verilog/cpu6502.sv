@@ -678,7 +678,7 @@ module cpu6502
             control.adh.hold = 1;
             control.adl.index = 1;
             control.pc.vector = 1;
-            control.i.sei = 1;
+            control.i.sei = opcode_brk;
         end
 
         if (opcode_store
