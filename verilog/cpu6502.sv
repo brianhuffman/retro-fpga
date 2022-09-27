@@ -53,6 +53,7 @@ module cpu6502
     var logic [9:0]  reg_branch; // result of branch target calculation, with carry
     var logic [7:0]  reg_data_in; // registered input
     var logic [7:0]  reg_rmw; // result of previous rmw calculation
+    var logic        irq_active; // IRQ instruction starting or in progress
     // TODO: registered input for irq, nmi, set_overflow
 
     wire logic [7:0] data_in = reg_data_in;
@@ -718,7 +719,7 @@ module cpu6502
         (control.db.count   ? count_out : '0);
 
     // P register
-    wire logic flag_b = 1'b1; // TODO: set this from a control bit.
+    wire logic flag_b = ~irq_active;
     wire logic [7:0] status_out =
         {flag_n, flag_v, 1'b1, flag_b, flag_d, flag_i, flag_z, flag_c};
 
@@ -842,7 +843,7 @@ module cpu6502
 
         else if (io_enable) begin
             if (reg_state.byte1) begin
-                reg_opcode <= io_data_in;
+                reg_opcode <= irq_active ? 8'h00 : io_data_in;
             end
             reg_pc     <= next_pc;
             reg_a      <= next_a;
@@ -861,6 +862,11 @@ module cpu6502
             reg_index  <= next_index;
             reg_branch <= branch_result;
             reg_rmw    <= rmw_out;
+
+            // scan for IRQ in the cycle before sync
+            if (next_state.byte1) begin
+                irq_active <= io_irq & ~flag_i;
+            end
 
             // update reg_data_in if this is a non-dummy read cycle
             if (~control.write.enable & ~reg_state.stack1) begin
