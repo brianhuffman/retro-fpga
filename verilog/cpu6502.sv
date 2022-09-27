@@ -300,7 +300,7 @@ module cpu6502
             next_state.byte2 = 1;
             control.adh.pch = 1;
             control.adl.pcl = 1;
-            control.pc.increment = 1;
+            control.pc.increment = ~irq_active;
 
             // Set flags and registers based on previous instruction
             control.count.x = opcode_txa | opcode_inx | opcode_dex;
